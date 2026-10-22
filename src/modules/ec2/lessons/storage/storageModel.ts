@@ -3,7 +3,7 @@
  * scripted day of trouble for the orders.
  *
  * AWS defaults used here: the root EBS volume has DeleteOnTermination on, other
- * EBS volumes have it off. Instance store lives on the host's own disks, so its
+ * EBS volumes attached after launch have it off. Instance store lives on the host's own disks, so its
  * data survives only a reboot.
  */
 
@@ -52,11 +52,12 @@ export function transition(s: ServerState, a: DiskAction): ServerState {
 
 /* ---------------------------------------------------------------- Disk lab */
 
-export type LabCommand = DiskAction | 'relaunch' | 'write' | 'snapshot' | 'restore'
+export type LabCommand = DiskAction | 'relaunch' | 'attach' | 'write' | 'snapshot' | 'restore'
 
 export type LabEvent =
   | { kind: 'action'; action: DiskAction; lost: Disk[] }
   | { kind: 'relaunch' }
+  | { kind: 'attach' }
   | { kind: 'write' }
   | { kind: 'snapshot' }
   | { kind: 'restore' }
@@ -71,7 +72,7 @@ export interface LabState {
   extraAttached: boolean
   /** The latest snapshot of the extra volume, if any. */
   snapshot: { hasData: boolean } | null
-  /** A new volume was made from the snapshot in another AZ. */
+  /** A new volume was made from the latest snapshot in another AZ. A newer snapshot clears it. */
   restored: boolean
   last: LabEvent | null
 }
@@ -90,17 +91,21 @@ export const initialLab: LabState = {
 export function labStep(s: LabState, c: LabCommand): LabState {
   switch (c) {
     case 'relaunch':
-      // A new server from the same image: fresh root volume, empty instance store,
-      // and the kept extra volume attached again (same AZ).
+      // A new server from the same image: fresh root volume and empty instance store.
+      // The kept extra volume stays detached until the owner attaches it (same AZ).
       if (s.server !== 'terminated') return s
       return {
         ...s,
         server: 'running',
         data: { 'instance-store': false, 'ebs-root': false, 'ebs-extra': s.data['ebs-extra'] },
         rootDeleted: false,
-        extraAttached: true,
+        extraAttached: false,
         last: { kind: 'relaunch' },
       }
+    case 'attach':
+      // The owner attaches the kept volume to the running server.
+      if (s.server !== 'running' || s.extraAttached) return s
+      return { ...s, extraAttached: true, last: { kind: 'attach' } }
     case 'write':
       if (s.server !== 'running') return s
       return {
@@ -109,7 +114,8 @@ export function labStep(s: LabState, c: LabCommand): LabState {
         last: { kind: 'write' },
       }
     case 'snapshot':
-      return { ...s, snapshot: { hasData: s.data['ebs-extra'] }, last: { kind: 'snapshot' } }
+      // A volume restored earlier came from an older snapshot, so it no longer matches the latest one.
+      return { ...s, snapshot: { hasData: s.data['ebs-extra'] }, restored: false, last: { kind: 'snapshot' } }
     case 'restore':
       if (!s.snapshot || s.restored) return s
       return { ...s, restored: true, last: { kind: 'restore' } }

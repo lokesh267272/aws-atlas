@@ -4,12 +4,12 @@ import type { Glossary } from '../../../../course/types'
 export const terms: Glossary = {
   'host-computer': {
     term: 'Host computer',
-    short: 'The physical server in an AWS data center that your instance runs on. Several instances can share one host.',
+    short: 'The physical server in an AWS data center that your instance runs on, often shared with other instances.',
   },
   'instance-store': {
     term: 'Instance store',
     short:
-      'Disks physically inside the host computer, fast but temporary. The data survives a reboot, but is lost when the instance stops or terminates, or the disk fails. Only some instance types have one.',
+      'Fast, temporary disks inside the host computer (only some instance types have them): the data survives a reboot but is lost when the instance stops, hibernates or terminates, or the disk fails.',
   },
   'ebs-volume': {
     term: 'EBS volume',
@@ -24,12 +24,12 @@ export const terms: Glossary = {
   'delete-on-termination': {
     term: 'Delete on termination',
     short:
-      'A setting on each EBS volume attached to an instance: if it is on, the volume is deleted when the instance is terminated. By default it is on for the root volume and off for volumes attached after launch.',
+      'A setting on each EBS volume: if on, the volume is deleted when its instance is terminated (on by default for the root volume, off for volumes attached after launch).',
   },
   'ebs-snapshot': {
     term: 'EBS snapshot',
     short:
-      'A point-in-time backup of an EBS volume. AWS stores it in Amazon S3, outside any one AZ, and you can restore it as a new volume in any AZ of the same Region.',
+      'A point-in-time backup of an EBS volume, kept by AWS in Amazon S3 (not in a bucket you can see) outside any one AZ, and restorable as a new volume in any AZ of the Region.',
   },
   'data-lifecycle-manager': {
     term: 'Amazon Data Lifecycle Manager',

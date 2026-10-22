@@ -28,7 +28,7 @@ const eventInfo: Record<ScenarioEvent, { label: string; sub: string; icon: Lucid
   'maintenance-stop': { label: 'Maintenance stop', sub: 'stop, then start', icon: Wrench },
   'replace-server': { label: 'Server replaced', sub: 'terminate, launch a new one', icon: RefreshCw },
   'shop-closes': { label: 'Shop closes', sub: 'last order of the day', icon: Store },
-  'volume-failure': { label: 'Volume fails', sub: 'rare, but it happens', icon: HardDrive },
+  'volume-failure': { label: 'Volume fails', sub: 'next night: rare, but it happens', icon: HardDrive },
 }
 
 const diskName: Record<Disk, string> = {
@@ -45,11 +45,19 @@ const diskOptions: SegmentedOption<Disk>[] = [
 
 type SnapKey = 'none' | ScenarioEvent
 
+/** The event's name inside a snapshot option, so the choice reads "23:00 closes", not just a time. */
+const snapEventWord: Record<ScenarioEvent, string> = {
+  'maintenance-stop': 'stop',
+  'replace-server': 'replaced',
+  'shop-closes': 'closes',
+  'volume-failure': 'failure',
+}
+
 const snapOptions: SegmentedOption<SnapKey>[] = [
   { value: 'none', label: 'No snapshot' },
   ...SCENARIO.filter((s) => s.event !== 'volume-failure').map((s) => ({
     value: s.event,
-    label: s.time,
+    label: `${s.time} ${snapEventWord[s.event]}`,
     description: `right after: ${eventInfo[s.event].label}`,
   })),
 ]
@@ -64,7 +72,7 @@ function whatHappened(disk: Disk, event: ScenarioEvent): string {
       return disk === 'instance-store' ? 'a stop wipes the instance store' : 'EBS keeps its data through a stop'
     case 'replace-server':
       if (disk === 'ebs-root') return 'the root volume is deleted with the old server'
-      if (disk === 'ebs-extra') return 'the extra volume is attached to the new server'
+      if (disk === 'ebs-extra') return 'you attach the kept extra volume to the new server'
       return 'the new server has an empty instance store'
     case 'shop-closes':
       return 'no more orders tonight'
@@ -77,7 +85,7 @@ type Badge = { tone: 'ok' | 'bad' | 'neutral' | 'warn'; text: string }
 
 function stepBadges(step: StepResult): Badge[] {
   const out: Badge[] = []
-  if (step.restored > 0) out.push({ tone: 'ok', text: `${step.restored} restored from the snapshot` })
+  if (step.restored > 0) out.push({ tone: 'ok', text: `${step.restored} recoverable from the snapshot` })
   if (step.lost > 0) out.push({ tone: 'bad', text: `${step.lost} orders lost` })
   if (out.length === 0) out.push(step.wiped ? { tone: 'neutral', text: 'nothing to lose' } : { tone: 'ok', text: 'orders kept' })
   return out
@@ -87,7 +95,7 @@ function stepBadges(step: StepResult): Badge[] {
 function batchBadge(b: Batch, shown: number | null, snapIndex: number | null): Badge | null {
   if (shown === null || shown < index(b.before)) return null
   if (b.lostAt && index(b.lostAt) < shown) return { tone: 'bad', text: `lost at ${timeOf(b.lostAt)}` }
-  if (b.restoredAt && index(b.restoredAt) < shown) return { tone: 'ok', text: 'restored' }
+  if (b.restoredAt && index(b.restoredAt) < shown) return { tone: 'ok', text: 'recoverable' }
   if (b.inSnapshot && snapIndex !== null && snapIndex < shown) return { tone: 'ok', text: 'in the snapshot' }
   return { tone: 'neutral', text: 'saved' }
 }
@@ -99,6 +107,8 @@ export function SnapshotChallenge() {
   /** How many events have played: null before the first run. */
   const [shown, setShown] = useState<number | null>(null)
   const timer = useRef<number | undefined>(undefined)
+  /** Show me is playing: ignore control changes so the solution is not left half-run. */
+  const showing = useRef(false)
   const run = useMemo(() => playScenario(choice), [choice])
 
   const stopTimer = useCallback(() => {
@@ -135,12 +145,14 @@ export function SnapshotChallenge() {
   }
 
   const choose = (next: Partial<Choice>) => {
+    if (showing.current) return
     stopTimer()
     setShown(null)
     setChoice((c) => ({ ...c, ...next }))
   }
 
   const reset = () => {
+    showing.current = false
     stopTimer()
     setShown(null)
     setChoice(START)
@@ -168,13 +180,16 @@ export function SnapshotChallenge() {
     >
       <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
-          <Segmented
-            label="Save orders on"
-            size="sm"
-            value={choice.ordersOn}
-            options={diskOptions}
-            onChange={(ordersOn) => choose({ ordersOn })}
-          />
+          <div className="flex min-w-0 flex-col items-start gap-1.5">
+            <Segmented
+              label="Save orders on"
+              size="sm"
+              value={choice.ordersOn}
+              options={diskOptions}
+              onChange={(ordersOn) => choose({ ordersOn })}
+            />
+            {choice.ordersOn !== 'instance-store' && <Pill>fine for one server; lesson 6 moves orders off the servers</Pill>}
+          </div>
           <Segmented
             label="Take one snapshot at"
             size="sm"
@@ -252,21 +267,27 @@ export function SnapshotChallenge() {
         </p>
 
         <Challenge
+          stale={challenge.state.solved && !(finished && run.ordersLost === 0)}
           goal="Get through the day with zero lost orders"
           checks={[
-            { label: 'Orders survive the maintenance stop', done: survived('maintenance-stop') },
-            { label: 'Orders survive the server being replaced', done: survived('replace-server') },
-            { label: 'Orders survive the volume failure', done: survived('volume-failure') },
+            { label: 'No orders lost at the maintenance stop', done: survived('maintenance-stop') },
+            { label: 'No orders lost when the server is replaced', done: survived('replace-server') },
+            { label: 'No orders lost at the volume failure', done: survived('volume-failure') },
           ]}
           state={challenge.state}
           hint="Pick the disk that is kept when its server is terminated, and snapshot it after the last order."
           onHint={challenge.hint}
-          onShowMe={() => play(solution, () => challenge.show())}
+          onShowMe={() => {
+            showing.current = true
+            play(solution, () => {
+              showing.current = false
+              challenge.show()
+            })
+          }}
           successNote={
             <>
-              The extra volume outlived the stop and the new server, and the {timeOf('shop-closes')} snapshot brought every
-              order back when the volume failed.{' '}
-              <Pill className="mt-1">fine for one server; lesson 6 moves orders off the servers</Pill>
+              The extra volume outlived the stop and the new server, and the {timeOf('shop-closes')} snapshot let you rebuild
+              a volume with every order.
             </>
           }
         />
