@@ -36,7 +36,7 @@ export default function Lesson() {
         <RoleVsKey />
       </Section>
 
-      <Section title="Challenge: lock it down">
+      <Section title="Lock it down">
         <AccessChallenge />
       </Section>
 

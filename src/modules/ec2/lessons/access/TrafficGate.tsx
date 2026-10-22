@@ -69,7 +69,7 @@ const WHO: Record<string, { name: string; icon: LucideIcon }> = {
 }
 
 const protocol = (port: number): ReactNode =>
-  port === 443 ? <Term k="https">HTTPS</Term> : port === 22 ? <Term k="ssh-protocol">SSH</Term> : portName(port)
+  port === 443 ? <Term k="https">HTTPS</Term> : port === 22 ? <Term k="ssh">SSH</Term> : portName(port)
 
 // Timings in seconds. Each lane starts a little after the one above it.
 const STAGGER = 0.35
@@ -113,7 +113,10 @@ export function TrafficGate({
   const stageRef = useRef<HTMLDivElement>(null)
   const startFromBelow = () => {
     onStart()
-    stageRef.current?.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' })
+    const box = stageRef.current?.getBoundingClientRect()
+    // Only scroll when the stage is not already fully in view.
+    if (box && (box.top < 0 || box.bottom > window.innerHeight))
+      stageRef.current?.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' })
   }
 
   const summary = live
@@ -152,6 +155,7 @@ export function TrafficGate({
 
       <RuleEditor gate={gate} />
 
+      {outboundToggle && (
       <div className="mt-4">
         <h4 className="text-sm font-bold text-ink-2">
           <Term k="sg-outbound-rule">Outbound rules</Term>
@@ -177,10 +181,9 @@ export function TrafficGate({
             )}
           </p>
         )}
-        {outboundToggle && (
-          <Switch className="mt-2" label="Default outbound rule" checked={outbound} onChange={gate.setOutbound} />
-        )}
+        <Switch className="mt-2" label="Default outbound rule" checked={outbound} onChange={gate.setOutbound} />
       </div>
+      )}
 
       {children}
 
@@ -291,14 +294,14 @@ function Lane({
         </div>
         {live && !allowed && (
           <Appear show={!reduce} delay={hitAt} runKey={run} className="absolute right-0 top-3.5 -translate-y-1/2 translate-x-1/2">
-            <span aria-hidden className="grid size-5 place-items-center rounded-full bg-bad text-white [&_svg]:size-3.5">
+            <span aria-hidden className={cn('grid size-5 place-items-center rounded-full text-white [&_svg]:size-3.5', threat ? 'bg-ink-3' : 'bg-bad')}>
               <X />
             </span>
           </Appear>
         )}
         {live && (
           <Appear show={!reduce} delay={doneAt} runKey={run} className="absolute bottom-0 right-3">
-            <Pill tone={allowed ? 'ok' : 'bad'}>{allowed ? 'In, reply out' : 'Blocked'}</Pill>
+            <Pill tone={allowed === req.wanted ? 'ok' : 'bad'}>{allowed ? 'In, reply out' : 'Blocked'}</Pill>
           </Appear>
         )}
       </div>
@@ -308,7 +311,7 @@ function Lane({
 
 const dotClass = (reply: boolean) =>
   cn(
-    'absolute top-3.5 inline-flex h-5 w-11 -translate-y-1/2 items-center justify-center rounded-full border-2 text-[10px] font-bold tabular-nums',
+    'absolute top-3.5 inline-flex h-5 w-11 -translate-y-1/2 items-center justify-center rounded-full border-2 text-[11px] font-bold tabular-nums',
     reply ? 'border-ok bg-ok-soft text-ok' : 'border-signal bg-signal-soft text-signal',
   )
 
@@ -425,7 +428,7 @@ function RuleEditor({ gate }: { gate: Gate }) {
               }))}
             />
             <p className="mt-1 text-xs text-ink-3">
-              <Term k="cidr-block">/32</Term> is one address, /0 is every address
+              <Term k="cidr-block">/32</Term> is one address, /0 is every IPv4 address
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -470,7 +473,6 @@ function RuleEditor({ gate }: { gate: Gate }) {
                     </b>{' '}
                     from {SOURCES[rule.source].label}{' '}
                     <span className="font-mono text-xs text-ink-3">{SOURCES[rule.source].cidr}</span>
-                    {gate.live && (
                       <span className="block text-xs text-ink-3">
                         Let in:{' '}
                         {letIn.length === 0 ? (
@@ -484,7 +486,6 @@ function RuleEditor({ gate }: { gate: Gate }) {
                           ))
                         )}
                       </span>
-                    )}
                   </span>
                   <Button
                     size="sm"

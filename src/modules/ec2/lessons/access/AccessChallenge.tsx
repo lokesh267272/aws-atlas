@@ -36,7 +36,7 @@ export function AccessChallenge() {
 
   return (
     <Bench
-      title="Challenge: lock down the server"
+      title="Try it: lock down the server"
       intro={
         <>
           Fix the <Term k="security-group">security group</Term> and the photo access, then press Start traffic to test it.
@@ -45,15 +45,16 @@ export function AccessChallenge() {
       onReset={reset}
     >
       <Challenge
-        goal="Let customers in, keep SSH to the office, block the rest, and keep keys off the server."
+        goal="Lock down the server"
         checks={[
-          { label: 'Customers get in on HTTPS (443)', done: c.customersIn },
-          { label: 'SSH (22) works only from the office', done: c.sshOfficeOnly },
+          { label: <>Customers get in on <Term k="https">HTTPS</Term> (443)</>, done: c.customersIn },
+          { label: <><Term k="ssh">SSH</Term> (22) works only from the office</>, done: c.sshOfficeOnly },
           { label: 'Nothing else can get in, and no rule is left unused', done: c.nothingElse },
           { label: 'The app reaches the photos without a stored key', done: c.photosWithoutKey },
         ]}
         state={challenge.state}
-        hint="Customers come from anywhere, SSH only from the office address, the database port needs no rule, and a role replaces the key."
+        stale={challenge.state.solved && !solved(c)}
+        hint="Only the office needs SSH, and a role replaces the key."
         onHint={challenge.hint}
         onShowMe={showMe}
         successNote="Only two doors are open, and the app borrows short-lived credentials instead of keeping a key."

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowDown, ArrowRight, Boxes, Check, FastForward, FileText, HardHat, Image as ImageIcon, Server, TriangleAlert } from 'lucide-react'
+import { ArrowDown, ArrowRight, Boxes, Check, FastForward, FileText, HardHat, Image as ImageIcon, KeyRound, Server, TriangleAlert } from 'lucide-react'
+import { cn } from '../../../../lib/cn'
 import { Bench } from '../../../../components/lesson'
 import { Button, Pill, Readout, Segmented } from '../../../../components/controls'
 import { ServiceTile } from '../../../../components/diagram'
@@ -13,6 +14,8 @@ type Mode = 'access-key' | 'role'
 /** AWS's own documentation example key id: not a real key. */
 const EXAMPLE_KEY_ID = 'AKIAIOSFODNN7EXAMPLE'
 const BUCKET = 'mealhop-menu-photos'
+/** Presses of "Let a week pass" before the demo stops (keeps the day count small). */
+const MAX_WEEKS = 4
 
 /** "Try it: give the app its photos": a key stored on the server vs a role that hands out short-lived credentials. */
 export function RoleVsKey() {
@@ -45,7 +48,11 @@ export function RoleVsKey() {
             { value: 'role', label: 'Attach a role' },
           ]}
         />
-        <Button onClick={() => setDays((d) => d + 7)}>
+        <Button
+          onClick={() => setDays((d) => Math.min(d + 7, MAX_WEEKS * 7))}
+          aria-disabled={days >= MAX_WEEKS * 7}
+          className="aria-disabled:cursor-not-allowed"
+        >
           <FastForward aria-hidden />
           Let a week pass
         </Button>
@@ -107,6 +114,20 @@ export function RoleVsKey() {
           <ArrowDown className="size-5 md:hidden" />
           <ArrowRight className="hidden size-5 md:block" />
           <span className="text-xs font-bold md:max-w-28 md:text-center">{key ? 'signed with the key' : 'signed with temporary credentials'}</span>
+          {/* The credential itself: the key just ages, a role's credential is swapped for a fresh one each week. */}
+          <motion.span
+            key={`${mode}-${days}`}
+            initial={days > 0 && !reduce ? { opacity: 0, y: -6 } : false}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold',
+              key ? (days > 0 ? 'border-warn bg-warn-soft text-ink' : 'border-line-strong bg-sunken text-ink-2') : 'border-ok bg-ok-soft text-ok',
+            )}
+          >
+            <KeyRound aria-hidden className="size-3" />
+            {key ? (days === 0 ? 'key, new' : `same key, ${days} days old`) : `credentials #${days / 7 + 1}, replaced`}
+          </motion.span>
         </div>
 
         {/* The bucket */}
@@ -146,14 +167,14 @@ export function RoleVsKey() {
                   : `the same key, ${days} days old`
                 : days > 0
                   ? 'the old ones expired and were replaced'
-                  : 'issued minutes ago'
+                  : 'issued recently'
             }
             tone={key && days > 0 ? 'warn' : 'neutral'}
           />
           <Readout
-            label="It stops working"
-            value={key ? 'Never' : 'Soon'}
-            hint={key ? 'until someone turns it off or deletes it' : 'then new ones arrive automatically'}
+            label="Lifetime"
+            value={key ? 'Until deleted' : 'Rotated for you'}
+            hint={key ? 'until someone turns it off or deletes it' : 'new ones arrive automatically'}
             tone={key ? 'warn' : 'ok'}
           />
         </motion.div>
