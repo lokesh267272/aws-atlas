@@ -1,5 +1,6 @@
 import { Camera, Database, HardDrive, KeyRound, Network, Scaling, Server, ShieldCheck } from 'lucide-react'
 import { Bench } from '../../components/lesson'
+import { Term } from '../../components/Term'
 import { Boundary, ServiceTile } from '../../components/diagram'
 import { story } from './story'
 
@@ -11,17 +12,20 @@ export function SetupDiagram({ step }: { step: Step }) {
     <Bench title="Your setup so far" intro="The highlighted part is what this lesson added to the delivery app.">
       <Boundary kind="region" label={story.regionName}>
         <div className="flex flex-col gap-3">
-          <Boundary kind="vpc" label={`${story.appName} network (VPC)`}>
+          <Boundary kind="vpc" label={
+              <>
+                {story.appName} network (<Term k="vpc">VPC</Term>)
+              </>
+            }>
             {step >= 4 && (
               <div className="mb-3 flex flex-wrap gap-x-3 gap-y-2">
                 <ServiceTile name="Security group" category="security" icon={ShieldCheck} selected={step === 4} />
-                <ServiceTile name="Server role" category="security" icon={KeyRound} selected={step === 4} />
               </div>
             )}
             {step === 6 ? <ScaledOut /> : <SingleAz step={step} />}
           </Boundary>
           {step >= 3 && (
-            <div className="flex flex-wrap">
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
               <ServiceTile
                 name="Snapshot"
                 category="storage"
@@ -29,6 +33,15 @@ export function SetupDiagram({ step }: { step: Step }) {
                 caption="backup outside the AZ"
                 selected={step === 3}
               />
+              {step >= 4 && (
+                <ServiceTile
+                  name="Server role"
+                  category="security"
+                  icon={KeyRound}
+                  caption="attached to the server"
+                  selected={step === 4}
+                />
+              )}
             </div>
           )}
         </div>
@@ -69,16 +82,15 @@ function SingleAz({ step }: { step: Step }) {
 function ScaledOut() {
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap">
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
         <ServiceTile name="Load balancer" category="networking" icon={Network} selected />
+        <ServiceTile name="Auto Scaling group" category="compute" icon={Scaling} caption="spans 3 AZs" selected />
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         {story.azs.map((az, i) => (
           <Boundary key={az} kind="az" label={az}>
             <div className="flex flex-col gap-3">
-              <Boundary kind="group" label="Auto Scaling group" icon={Scaling} highlighted>
-                <ServiceTile name="Server" category="compute" icon={Server} selected />
-              </Boundary>
+              <ServiceTile name="Server" category="compute" icon={Server} selected />
               {i < 2 && (
                 <ServiceTile
                   name="Orders database"

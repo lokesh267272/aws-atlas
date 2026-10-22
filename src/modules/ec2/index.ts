@@ -10,7 +10,7 @@ export const ec2: CourseModule = {
   id: 'ec2',
   number: 2,
   title: 'Servers on demand',
-  tagline: 'Rent a server, size it, protect it and scale it',
+  tagline: 'Rent, protect and scale servers',
   description:
     'Launch virtual servers in minutes and pay only for what you use. Follow one food delivery app as it grows from a single server to a setup that survives failures.',
   outcomes: [
