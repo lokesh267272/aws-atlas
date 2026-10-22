@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ComponentRef, type CSSProperties, type ReactNode, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type ComponentRef, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Edges, Html, Line } from '@react-three/drei'
 import { Color, MathUtils, Vector3, type Group, type Mesh, type MeshLambertMaterial, type PerspectiveCamera } from 'three'
@@ -84,6 +84,16 @@ function CameraRig() {
   return null
 }
 
+/**
+ * Where every label's DOM node lives: the canvas's own wrapper, fixed from the first frame (same fix as the Region scene).
+ * Without it, drei's Html moves its node once the canvas connects its events and, when the scene mounts inside
+ * React DOM's commit (cached lazy chunk, e.g. on re-entering the lesson), unmounts its React root synchronously there.
+ */
+function useLabelHost(): RefObject<HTMLElement> {
+  const gl = useThree((s) => s.gl)
+  return useMemo(() => ({ current: gl.domElement.parentElement! }), [gl])
+}
+
 /** A short DOM label pinned to a point in the scene. Hidden from screen readers: the status line and legend say the same. */
 function Label({
   position,
@@ -107,8 +117,9 @@ function Label({
     'above-right': '-translate-y-full',
   }
   const style: CSSProperties = { opacity }
+  const host = useLabelHost()
   return (
-    <Html position={position} center={place === 'center'} zIndexRange={[10, 0]} pointerEvents="none">
+    <Html position={position} center={place === 'center'} zIndexRange={[10, 0]} pointerEvents="none" portal={host}>
       <div
         ref={labelRef}
         aria-hidden
