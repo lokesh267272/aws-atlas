@@ -17,4 +17,11 @@ describe('launch lesson', () => {
     const html = renderToStaticMarkup(<Lesson />)
     expect(html).not.toMatch(/(required|must choose|won.t launch|can.t launch|refuse)/i)
   })
+
+  it('states the audited facts: web server assumption, Nitro hardware, no instance-only wording', () => {
+    const html = renderToStaticMarkup(<Lesson />)
+    expect(html).toMatch(/hardware \+ .*hypervisor.* layer/)
+    expect(html).not.toMatch(/turned away/)
+    expect(html).not.toMatch(/No key to log in with/)
+  })
 })

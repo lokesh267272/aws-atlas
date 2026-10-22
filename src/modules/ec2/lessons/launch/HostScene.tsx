@@ -186,6 +186,8 @@ export default function HostScene({ stage, reduced }: { stage: HostStage; reduce
   const nitroLabel = useRef<HTMLDivElement>(null)
   const azLabel = useRef<HTMLDivElement>(null)
   const blockLabels = useRef<(HTMLDivElement | null)[]>([])
+  const freeText = useRef<HTMLSpanElement>(null)
+  const youText = useRef<HTMLSpanElement>(null)
 
   // Going back (Reset) or reduced motion: jump straight to the end state.
   useEffect(() => {
@@ -231,6 +233,9 @@ export default function HostScene({ stage, reduced }: { stage: HostStage; reduce
     }
     if (nitroLabel.current) nitroLabel.current.style.opacity = String(now.nitro)
     if (azLabel.current) azLabel.current.style.opacity = String(now.az)
+    // The Free and You words cross-fade with the block's colour instead of flipping when Rent is pressed.
+    if (freeText.current) freeText.current.style.opacity = String(1 - now.you)
+    if (youText.current) youText.current.style.opacity = String(now.you)
     blockLabels.current.forEach((el, i) => {
       if (el) el.style.opacity = String(now.blocks[i])
     })
@@ -313,7 +318,18 @@ export default function HostScene({ stage, reduced }: { stage: HostStage; reduce
                   blockLabels.current[i] = el
                 }}
               >
-                {yours ? (stage === 'rented' ? 'You' : 'Free') : b.label}
+                {yours ? (
+                  <span className="grid">
+                    <span ref={freeText} style={{ gridArea: '1 / 1', opacity: 1 - start.you }}>
+                      Free
+                    </span>
+                    <span ref={youText} style={{ gridArea: '1 / 1', opacity: start.you }}>
+                      You
+                    </span>
+                  </span>
+                ) : (
+                  b.label
+                )}
               </Label>
             </group>
           )

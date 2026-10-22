@@ -10,8 +10,8 @@ export default function Lesson() {
     <>
       <Prose>
         <p>
-          {story.appName}, a food delivery app, needs a <Term k="server">server</Term> for its menu page, so you will
-          rent an <Term k="ec2">EC2</Term> <Term k="instance">instance</Term>: a slice of a real server.
+          {story.appName}&apos;s menu page needs a <Term k="server">server</Term>, so you will rent an{' '}
+          <Term k="ec2">EC2</Term> <Term k="instance">instance</Term>: a slice of a real one.
         </p>
       </Prose>
 
@@ -19,17 +19,17 @@ export default function Lesson() {
         <HostExplorer />
       </Section>
 
-      <Section title="Launch your first instance">
+      <Section title="Launch your first server">
         <LaunchBuilder />
         <Callout kind="real-aws">
           <p>
-            The launch page fills in most parts for you, and for Linux the new{' '}
-            <Term k="security-group">security group</Term> it creates lets in only <Term k="ssh">SSH</Term>, from
-            anywhere.
+            Linux launches get a new <Term k="security-group">security group</Term> that lets in{' '}
+            <Term k="ssh">SSH</Term> from anywhere.
           </p>
         </Callout>
-        <SetupDiagram step={1} />
       </Section>
+
+      <SetupDiagram step={1} />
     </>
   )
 }

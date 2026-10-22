@@ -1,6 +1,6 @@
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Check, Circle, CircleDashed, Power, Rocket, Server, TriangleAlert, WifiOff } from 'lucide-react'
+import { Check, Circle, CircleDashed, Lock, Rocket, Server, Trash2, TriangleAlert, WifiOff } from 'lucide-react'
 // The extension is explicit: on a case-insensitive disk "components/Challenge" would resolve to challenge.ts.
 import { Challenge, useChallenge } from '../../../../components/Challenge.tsx'
 import { Button, Pill, Segmented } from '../../../../components/controls'
@@ -33,11 +33,11 @@ const BOOT_MS = 2200
 const PUBLIC_IP = '203.0.113.24'
 
 /** One line per missing part: why the part matters. Never that AWS refuses to launch. */
-const WHY: Record<LaunchPart, { name: string; why: string }> = {
-  ami: { name: 'AMI', why: 'picks the operating system your server starts with.' },
-  instanceType: { name: 'Instance type', why: 'sets how much CPU and memory you rent.' },
-  keyPair: { name: 'Key pair', why: 'decides whether you can log in with your own key.' },
-  securityGroup: { name: 'Security group', why: 'decides what traffic can reach the server.' },
+const WHY: Record<LaunchPart, { name: ReactNode; why: string }> = {
+  ami: { name: <Term k="ami">AMI</Term>, why: 'picks the operating system your server starts with.' },
+  instanceType: { name: <Term k="instance-type">Instance type</Term>, why: 'sets how much CPU and memory you rent.' },
+  keyPair: { name: <Term k="key-pair">Key pair</Term>, why: 'decides whether you can log in with your own key.' },
+  securityGroup: { name: <Term k="security-group">Security group</Term>, why: 'decides what traffic can reach the server.' },
   storage: { name: 'Storage', why: 'sizes the disk that holds the system and your app.' },
 }
 
@@ -51,7 +51,7 @@ const SG_OPTIONS: { value: SecurityGroupChoice; label: string; lets: string }[] 
 const MENU = ['Masala dosa', 'Veg biryani', 'Mango lassi']
 
 /** One part of the launch: its AWS name, whether it is chosen, and the choice itself. */
-function Slot({ title, done, children }: { title: ReactNode; done: boolean; children: ReactNode }) {
+function Slot({ title, done, locked, children }: { title: ReactNode; done: boolean; locked: boolean; children: ReactNode }) {
   return (
     <div className="min-w-0 rounded-md border border-line bg-paper/50 p-3">
       <p className="mb-1 flex items-center gap-1.5 font-bold text-ink">
@@ -61,6 +61,12 @@ function Slot({ title, done, children }: { title: ReactNode; done: boolean; chil
           <Circle aria-hidden className="size-4 shrink-0 text-ink-3" />
         )}
         {title}
+        {locked && (
+          <Pill className="ml-auto">
+            <Lock aria-hidden />
+            Locked
+          </Pill>
+        )}
       </p>
       {children}
     </div>
@@ -110,8 +116,8 @@ function InstanceCard({ config, instance, reduced }: { config: LaunchConfig; ins
         <dt className="text-ink-3">
           <Term k="public-ip">Public IP</Term>
         </dt>
-        <dd className={cn('font-mono', instance === 'running' ? 'text-ink' : 'text-ink-3')}>
-          {instance === 'running' ? PUBLIC_IP : 'none yet'}
+        <dd className={cn('font-mono', launched ? 'text-ink' : 'text-ink-3')}>
+          {launched ? PUBLIC_IP : 'none yet'}
         </dd>
       </dl>
     </div>
@@ -164,7 +170,7 @@ function MenuPage({ instance, reachable, reduced }: { instance: InstanceState; r
               <WifiOff aria-hidden className="size-4 shrink-0 text-bad" />
               This site can&apos;t be reached
             </p>
-            <p className="mt-1 text-sm text-ink-2">The security group lets in no web traffic, so browsers are turned away.</p>
+            <p className="mt-1 text-sm text-ink-2">The security group lets in no web traffic, so the page never loads.</p>
           </motion.div>
         )}
       </div>
@@ -178,8 +184,10 @@ export function LaunchBuilder() {
   const [config, setConfig] = useState<LaunchConfig>(emptyConfig)
   const [instance, setInstance] = useState<InstanceState>('not-launched')
   const challenge = useChallenge()
-  const { solve, fail } = challenge
+  const { solve, fail, show } = challenge
   const reasonsId = useId()
+  // Set by Show me: the boot that follows is the demonstration, so it finishes the challenge as shown.
+  const demo = useRef(false)
 
   const missing = missingParts(config)
   const locked = instance !== 'not-launched'
@@ -197,23 +205,32 @@ export function LaunchBuilder() {
       () => {
         const next = transition('pending', 'boot-complete', config)
         setInstance(next)
-        if (menuReachable(config, next)) solve()
-        else fail()
+        if (menuReachable(config, next)) {
+          if (demo.current) show()
+          else solve()
+        } else fail()
       },
       reduced ? 0 : BOOT_MS,
     )
     return () => window.clearTimeout(t)
-  }, [instance, config, reduced, solve, fail])
+  }, [instance, config, reduced, solve, fail, show])
 
-  const launch = () => setInstance((s) => transition(s, 'launch', config))
-  const terminate = () => setInstance('not-launched')
+  const launch = () => {
+    demo.current = false
+    setInstance((s) => transition(s, 'launch', config))
+  }
+  const terminate = () => {
+    demo.current = false
+    setInstance('not-launched')
+  }
   // Show me starts a fresh launch with parts that work, replacing any instance already there.
   const showMe = () => {
+    demo.current = true
     setConfig(solution)
     setInstance(transition('not-launched', 'launch', solution))
-    challenge.show()
   }
   const reset = () => {
+    demo.current = false
     setConfig(emptyConfig)
     setInstance('not-launched')
     challenge.reset()
@@ -223,7 +240,7 @@ export function LaunchBuilder() {
 
   return (
     <Bench
-      title={`Try it: launch the ${story.appName} server`}
+      title="Try it"
       intro={
         <>
           Choose all five parts, press <strong className="text-ink-2">Launch</strong>, and notice which part decides
@@ -247,7 +264,7 @@ export function LaunchBuilder() {
           {
             label: (
               <>
-                The <Term k="instance">instance</Term> is running
+                The <Term k="instance">server</Term> is running
               </>
             ),
             done: instance === 'running',
@@ -256,20 +273,21 @@ export function LaunchBuilder() {
         state={challenge.state}
         hint={
           <>
-            Browsers send web traffic, so terminate, choose a security group option with <strong>Web</strong> in it,
+            Browsers send web traffic, terminate the instance, choose a security group option with <strong>Web</strong> in it,
             then launch again.
           </>
         }
         onHint={challenge.hint}
         onShowMe={showMe}
-        successNote="It's running and its security group lets web traffic in, so browsers can reach it."
+        stale={!reachable}
+        successNote="It's running and its security group lets web traffic in (we assume a web server is installed)."
       />
 
       <div className="mt-5 grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]">
-        <fieldset disabled={locked} className="grid min-w-0 content-start gap-3 disabled:opacity-60">
+        <fieldset disabled={locked} className="grid min-w-0 content-start gap-3 disabled:opacity-80">
           <legend className="sr-only">Parts of the launch</legend>
 
-          <Slot title={<Term k="ami">AMI</Term>} done={config.ami !== null}>
+          <Slot title={<Term k="ami">AMI</Term>} done={config.ami !== null} locked={locked}>
             <Segmented
               label="Which operating system?"
               size="sm"
@@ -279,7 +297,7 @@ export function LaunchBuilder() {
             />
           </Slot>
 
-          <Slot title={<Term k="instance-type">Instance type</Term>} done={config.instanceType !== null}>
+          <Slot title={<Term k="instance-type">Instance type</Term>} done={config.instanceType !== null} locked={locked}>
             <Segmented
               label="How much CPU and memory?"
               size="sm"
@@ -288,11 +306,17 @@ export function LaunchBuilder() {
               onChange={(v) => set('instanceType', v)}
             />
             <p className={note}>
-              {type ? `${type.vcpu} virtual CPUs and ${type.memGiB} GiB of memory.` : 'Bigger types get more of both.'}
+              {type ? (
+                <>
+                  {type.vcpu} <Term k="vcpu">virtual CPUs</Term> and {type.memGiB} <Term k="gib">GiB</Term> of memory.
+                </>
+              ) : (
+                'Bigger types get more of both.'
+              )}
             </p>
           </Slot>
 
-          <Slot title={<Term k="key-pair">Key pair</Term>} done={config.keyPair !== null}>
+          <Slot title={<Term k="key-pair">Key pair</Term>} done={config.keyPair !== null} locked={locked}>
             <Segmented
               label="How will you log in?"
               size="sm"
@@ -306,7 +330,7 @@ export function LaunchBuilder() {
             {config.keyPair === 'none' ? (
               <Pill tone="warn" className="mt-2">
                 <TriangleAlert aria-hidden />
-                No key to log in with
+                No key pair: no SSH key login
               </Pill>
             ) : (
               <p className={note}>
@@ -315,7 +339,7 @@ export function LaunchBuilder() {
             )}
           </Slot>
 
-          <Slot title={<Term k="security-group">Security group</Term>} done={config.securityGroup !== null}>
+          <Slot title={<Term k="security-group">Security group</Term>} done={config.securityGroup !== null} locked={locked}>
             <Segmented
               label="What traffic can get in?"
               size="sm"
@@ -332,7 +356,7 @@ export function LaunchBuilder() {
             )}
           </Slot>
 
-          <Slot title="Storage" done={config.storageGiB !== null}>
+          <Slot title="Storage" done={config.storageGiB !== null} locked={locked}>
             <Segmented
               label="How big is the root disk?"
               size="sm"
@@ -350,8 +374,8 @@ export function LaunchBuilder() {
         <div className="flex min-w-0 flex-col gap-3">
           <div>
             {instance === 'running' ? (
-              <Button onClick={terminate}>
-                <Power aria-hidden />
+              <Button variant="danger" onClick={terminate}>
+                <Trash2 aria-hidden />
                 Terminate
               </Button>
             ) : (
