@@ -4,8 +4,8 @@ import { Bench } from '../../../../components/lesson'
 import { Segmented } from '../../../../components/controls'
 import { Term } from '../../../../components/Term'
 import { cn } from '../../../../lib/cn'
-import { ChipStack } from './FamilyShapes'
-import { parseTypeName } from './sizingModel'
+import { ChipStack } from './ChipStack'
+import { GIB_PER_VCPU, SIZES, parseTypeName, sizeSpec } from './sizingModel'
 
 /** Real instance type names. Their vCPU and memory figures below are the real ones. */
 const EXAMPLES = ['m7g.large', 'c7gd.2xlarge', 'r7a.xlarge'] as const
@@ -27,19 +27,19 @@ const KIND_LABEL: Record<Kind, string> = {
 }
 
 const FAMILY: Record<string, { name: string; gibPerVcpu: number }> = {
-  m: { name: 'general purpose: a balance of CPU and memory', gibPerVcpu: 4 },
-  c: { name: 'compute optimized: more CPU for each GiB of memory', gibPerVcpu: 2 },
-  r: { name: 'memory optimized: more memory for each vCPU', gibPerVcpu: 8 },
+  m: { name: 'general purpose: a balance of CPU and memory', gibPerVcpu: GIB_PER_VCPU.m },
+  c: { name: 'compute optimized: more CPU for each GiB of memory', gibPerVcpu: GIB_PER_VCPU.c },
+  r: { name: 'memory optimized: more memory for each vCPU', gibPerVcpu: GIB_PER_VCPU.r },
 }
 
 const PROCESSOR: Record<string, ReactNode> = {
   g: (
     <>
-      <Term k="graviton">AWS Graviton</Term>, a processor that AWS designs itself, built on Arm.
+      <Term k="graviton">AWS Graviton</Term>, a chip AWS designs itself.
     </>
   ),
-  a: 'AMD, a processor made by AMD.',
-  i: 'Intel, a processor made by Intel.',
+  a: 'AMD chip.',
+  i: 'Intel chip.',
 }
 
 const FEATURE: Record<string, ReactNode> = {
@@ -49,8 +49,6 @@ const FEATURE: Record<string, ReactNode> = {
     </>
   ),
 }
-
-const SIZES = ['large', 'xlarge', '2xlarge'] as const
 
 function partsOf(name: string): Part[] {
   const p = parseTypeName(name)
@@ -66,13 +64,6 @@ function partsOf(name: string): Part[] {
   ]
 }
 
-/** vCPU and memory for a size of this family: large has 2 vCPU and each step doubles. */
-function spec(family: string, size: string) {
-  const step = Math.max(0, SIZES.indexOf(size as (typeof SIZES)[number]))
-  const vcpu = 2 * 2 ** step
-  return { vcpu, memoryGiB: vcpu * (FAMILY[family]?.gibPerVcpu ?? 4) }
-}
-
 /** An instance type name split into tappable parts. Each tap lights up what that part means. */
 export function NameDecoder() {
   const [example, setExample] = useState<Example>('m7g.large')
@@ -81,7 +72,7 @@ export function NameDecoder() {
   const parsed = parseTypeName(example)
   const prefix = `${parsed.family}${parsed.generation}${parsed.extras}`
   const current = parts.find((p) => p.key === selected) ?? parts[0]
-  const you = spec(parsed.family, parsed.size)
+  const you = sizeSpec(parsed.family, parsed.size)
 
   const choose = (next: Example) => {
     setExample(next)
@@ -192,7 +183,7 @@ function Meaning({
           <p className="text-ink-2">Higher numbers are newer hardware, usually with better value.</p>
           <div aria-hidden className="mt-2 flex items-center gap-1.5 text-xs text-ink-3">
             <span>older</span>
-            {[5, 6, 7, 8].map((g) => (
+            {[6, 7, 8, 9].map((g) => (
               <span
                 key={g}
                 className={cn(
@@ -237,10 +228,10 @@ function Meaning({
           <Heading>
             <span className="font-mono">{size}</span> = <Term k="instance-size">size</Term>
           </Heading>
-          <p className="text-ink-2">Each step up doubles the vCPUs and the memory, and the price.</p>
+          <p className="text-ink-2">Each step up roughly doubles the vCPUs, memory and price.</p>
           <ul className="mt-2 grid gap-1">
             {SIZES.map((s, i) => {
-              const sp = spec(family, s)
+              const sp = sizeSpec(family, s)
               const on = s === size
               return (
                 <li

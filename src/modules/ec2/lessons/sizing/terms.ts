@@ -8,28 +8,28 @@ export const terms: Glossary = {
   'instance-family': {
     term: 'Instance family',
     short:
-      'A group of instance types built for the same kind of work, shown by the letter at the start of the name: m for general purpose, c for compute, r for memory.',
+      'A group of instance types built for the same kind of work, shown by the letter at the start of the name, such as m, c or r.',
   },
   'instance-size': {
     term: 'Instance size',
     short:
-      'The part of an instance type name after the dot, such as large or 2xlarge. Each step up roughly doubles the vCPUs, the memory and the price.',
+      'The part of an instance type name after the dot, such as large or 2xlarge, where each step up roughly doubles the vCPUs, memory and price.',
   },
   vcpu: {
     term: 'vCPU (virtual CPU)',
-    short: 'One unit of processing power in a virtual server. More vCPUs let a server do more work at the same time.',
+    short: 'One unit of processing power in a virtual server, so more vCPUs means more work at the same time.',
   },
   gib: {
     term: 'GiB (gibibyte)',
-    short: 'A unit of memory or storage, a little bigger than a gigabyte (GB). EC2 lists each instance type’s memory in GiB.',
+    short: 'A unit of memory or storage a little bigger than a gigabyte, which EC2 uses to list each instance type’s memory.',
   },
   graviton: {
     term: 'AWS Graviton',
     short:
-      'Processors that AWS designs itself, built on Arm. A g straight after the generation number, as in m7g, means the instance type uses one.',
+      'Processors that AWS designs itself, shown by a g straight after the generation number, as in m7g.',
   },
   gpu: {
     term: 'GPU (graphics processing unit)',
-    short: 'A chip with thousands of small cores that do maths side by side. It speeds up graphics, video and machine learning.',
+    short: 'A chip with thousands of small cores that do maths side by side, speeding up graphics, video and machine learning.',
   },
 }

@@ -3,9 +3,12 @@ import {
   BUDGET_PER_HOUR,
   CATALOG,
   JOBS,
+  failedJobs,
   fit,
   parseTypeName,
   result,
+  sizeSpec,
+  smallerFits,
   solution,
   type InstanceType,
   type JobId,
@@ -113,5 +116,24 @@ describe('sizing model', () => {
   it('adds up the cost in whole cents', () => {
     expect(result(solution).cost).toBe(0.33)
     expect(result(solution).cost).toBeLessThanOrEqual(BUDGET_PER_HOUR)
+  })
+
+  it('sizeSpec matches the catalog', () => {
+    for (const t of CATALOG) {
+      const { family, size } = parseTypeName(t.name)
+      expect(sizeSpec(family, size)).toEqual({ vcpu: t.vcpu, memoryGiB: t.memoryGiB })
+    }
+  })
+
+  it('failedJobs counts jobs that run out of CPU or memory', () => {
+    expect(failedJobs(solution)).toBe(0)
+    expect(failedJobs({ website: 'm7g.large', routes: 'm7g.large', cache: 'm7g.large' })).toBe(2)
+  })
+
+  it('smallerFits flags only picks where one size down still fits', () => {
+    const [website, routes] = JOBS
+    expect(smallerFits(website, 'm7g.2xlarge')).toBe(true)
+    expect(smallerFits(website, 'm7g.large')).toBe(false)
+    expect(smallerFits(routes, 'c7g.xlarge')).toBe(false)
   })
 })
