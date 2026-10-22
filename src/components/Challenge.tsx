@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useReducer, useRef, type ReactNode } from 'react'
 import { Check, Circle, Lightbulb, Target } from 'lucide-react'
 import { cn } from '../lib/cn'
 import { Button, Pill } from './controls'
@@ -10,14 +10,15 @@ import {
   type ChallengeState,
 } from './challenge'
 
-/** Hook holding challenge progress. Call fail() on a miss, solve() on success, show() after applying the solution. */
+/** Hook holding challenge progress. Call fail() on a miss, solve() on success, show() after applying the solution; pass hint() to the panel as onHint. */
 export function useChallenge() {
   const [state, dispatch] = useReducer(challengeReducer, initialChallenge)
   const fail = useCallback(() => dispatch({ type: 'fail' }), [])
   const solve = useCallback(() => dispatch({ type: 'solve' }), [])
   const show = useCallback(() => dispatch({ type: 'show' }), [])
+  const hint = useCallback(() => dispatch({ type: 'hint' }), [])
   const reset = useCallback(() => dispatch({ type: 'reset' }), [])
-  return useMemo(() => ({ state, fail, solve, show, reset }), [state, fail, solve, show, reset])
+  return useMemo(() => ({ state, fail, solve, show, hint, reset }), [state, fail, solve, show, hint, reset])
 }
 
 const darkButton =
@@ -29,6 +30,7 @@ export function Challenge({
   checks,
   state,
   hint,
+  onHint,
   onShowMe,
   successNote,
   tone = 'light',
@@ -37,13 +39,20 @@ export function Challenge({
   checks: { label: ReactNode; done: boolean }[]
   state: ChallengeState
   hint: ReactNode
+  /** Reveal the hint (wire to useChallenge().hint). */
+  onHint: () => void
   /** Apply the lesson's solution, then call show(). */
   onShowMe: () => void
   successNote: ReactNode
   tone?: 'light' | 'screen'
 }) {
   const screen = tone === 'screen'
-  const [hintOpen, setHintOpen] = useState(false)
+  const hintId = useId()
+  const solvedRef = useRef<HTMLDivElement>(null)
+  // The Show me button unmounts when solved, so move focus to the result.
+  useEffect(() => {
+    if (state.shown) solvedRef.current?.focus()
+  }, [state.shown])
   const hintAvailable = canHint(state)
   const showAvailable = canShow(state)
 
@@ -59,7 +68,7 @@ export function Challenge({
         <span>{goal}</span>
       </p>
 
-      <ul className="mt-3 grid gap-1.5">
+      <ul role="list" className="mt-3 grid gap-1.5">
         {checks.map((c, i) => (
           <li
             key={i}
@@ -85,12 +94,12 @@ export function Challenge({
         <div className="mt-3 flex flex-wrap gap-2">
           {hintAvailable &&
             (screen ? (
-              <button type="button" className={darkButton} onClick={() => setHintOpen(true)} aria-expanded={hintOpen}>
+              <button type="button" className={darkButton} onClick={onHint} aria-controls={hintId}>
                 <Lightbulb aria-hidden />
                 Hint
               </button>
             ) : (
-              <Button size="sm" onClick={() => setHintOpen(true)} aria-expanded={hintOpen}>
+              <Button size="sm" onClick={onHint} aria-controls={hintId}>
                 <Lightbulb aria-hidden />
                 Hint
               </Button>
@@ -108,15 +117,17 @@ export function Challenge({
         </div>
       )}
 
-      {hintAvailable && hintOpen && (
-        <p className={cn('mt-2 text-sm', screen ? 'text-screen-text' : 'text-ink-2')}>{hint}</p>
+      {hintAvailable && state.hinted && (
+        <p id={hintId} className={cn('mt-2 text-sm', screen ? 'text-screen-text' : 'text-ink-2')}>{hint}</p>
       )}
 
       <div aria-live="polite">
         {state.solved && (
           <div
+            ref={solvedRef}
+            tabIndex={-1}
             className={cn(
-              'mt-3 flex items-start gap-2 rounded-md p-2.5 text-sm',
+              'mt-3 flex outline-none items-start gap-2 rounded-md p-2.5 text-sm',
               screen ? 'border border-screen-line text-screen-text' : 'bg-ok-soft text-ink',
             )}
           >
@@ -124,7 +135,10 @@ export function Challenge({
               <Check aria-hidden />
               Solved
             </Pill>
-            <span>{successNote}</span>
+            <span>
+              {state.shown && <>Here&apos;s one way to do it. </>}
+              {successNote}
+            </span>
           </div>
         )}
       </div>

@@ -8,11 +8,13 @@ export interface ChallengeState {
   tries: number
   solved: boolean
   shown: boolean
+  /** The learner has asked for the hint. */
+  hinted: boolean
 }
 
-export const initialChallenge: ChallengeState = { tries: 0, solved: false, shown: false }
+export const initialChallenge: ChallengeState = { tries: 0, solved: false, shown: false, hinted: false }
 
-export type ChallengeAction = { type: 'fail' } | { type: 'solve' } | { type: 'show' } | { type: 'reset' }
+export type ChallengeAction = { type: 'fail' } | { type: 'solve' } | { type: 'show' } | { type: 'hint' } | { type: 'reset' }
 
 /** Pure state machine for a challenge: fail counts tries, solve/show finish it, reset starts over. */
 export function challengeReducer(s: ChallengeState, a: ChallengeAction): ChallengeState {
@@ -23,6 +25,8 @@ export function challengeReducer(s: ChallengeState, a: ChallengeAction): Challen
       return { ...s, solved: true }
     case 'show':
       return { ...s, solved: true, shown: true }
+    case 'hint':
+      return canHint(s) ? { ...s, hinted: true } : s
     case 'reset':
       return initialChallenge
   }
