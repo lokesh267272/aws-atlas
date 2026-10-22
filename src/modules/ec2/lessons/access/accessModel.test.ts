@@ -85,6 +85,16 @@ describe('the challenge', () => {
     expect(checks([...solution.rules, { port: 5432, source: 'anywhere' }], 'role').nothingElse).toBe(false)
   })
 
+  it('an extra rule nobody needs is not solved', () => {
+    const extra: Rule = { port: 5432, source: 'office' }
+    expect(checks([...solution.rules, extra], 'role').nothingElse).toBe(false)
+    expect(solved(checks([...solution.rules, extra], 'role'))).toBe(false)
+  })
+
+  it('HTTPS from the office alone is an unused rule', () => {
+    expect(solved(checks([...solution.rules, { port: 443, source: 'office' }], 'role'))).toBe(false)
+  })
+
   it('an access key on the server fails photosWithoutKey', () => {
     expect(checks(solution.rules, 'access-key').photosWithoutKey).toBe(false)
   })

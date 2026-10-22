@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { HardHat, KeyRound } from 'lucide-react'
+import { Check, HardHat, KeyRound } from 'lucide-react'
 import { Bench } from '../../../../components/lesson'
 import { Pill, Segmented } from '../../../../components/controls'
 import { Challenge, useChallenge } from '../../../../components/Challenge.tsx'
@@ -15,6 +15,8 @@ export function AccessChallenge() {
   const [photos, setPhotos] = useState<Photos>(challengeStart.photos)
   const challenge = useChallenge()
   const c = checks(gate.rules, photos)
+  // Every check is ticked but the run that proves it hasn't happened yet.
+  const ready = solved(c) && !challenge.state.solved
 
   const start = () => {
     gate.start()
@@ -47,7 +49,7 @@ export function AccessChallenge() {
         checks={[
           { label: 'Customers get in on HTTPS (443)', done: c.customersIn },
           { label: 'SSH (22) works only from the office', done: c.sshOfficeOnly },
-          { label: 'Nothing else gets in', done: c.nothingElse },
+          { label: 'Nothing else can get in, and no rule is left unused', done: c.nothingElse },
           { label: 'The app reaches the photos without a stored key', done: c.photosWithoutKey },
         ]}
         state={challenge.state}
@@ -61,6 +63,14 @@ export function AccessChallenge() {
         <TrafficGate
           gate={gate}
           onStart={start}
+          startNote={
+            ready && (
+              <Pill tone="ok">
+                <Check aria-hidden />
+                All set: press Start traffic
+              </Pill>
+            )
+          }
           serverBadge={
             photos === 'role' ? (
               <Pill tone="ok" className="max-w-full whitespace-normal text-center leading-tight [&_svg]:shrink-0">
@@ -74,19 +84,19 @@ export function AccessChallenge() {
               </Pill>
             )
           }
-        />
-      </div>
-
-      <div className="mt-4 border-t border-line pt-4">
-        <Segmented<Photos>
-          label="How the app reaches the menu photos"
-          value={photos}
-          onChange={setPhotos}
-          options={[
-            { value: 'access-key', label: 'Paste an access key' },
-            { value: 'role', label: 'Attach a role' },
-          ]}
-        />
+        >
+          <div className="mt-4 border-t border-line pt-4">
+            <Segmented<Photos>
+              label="How the app reaches the menu photos"
+              value={photos}
+              onChange={setPhotos}
+              options={[
+                { value: 'access-key', label: 'Paste an access key' },
+                { value: 'role', label: 'Attach a role' },
+              ]}
+            />
+          </div>
+        </TrafficGate>
       </div>
     </Bench>
   )

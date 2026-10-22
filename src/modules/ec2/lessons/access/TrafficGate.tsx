@@ -85,12 +85,16 @@ const OVERSHOOT = 36
 /**
  * A server inside a security group. Start traffic sends four requests at it; each passes or bounces,
  * and allowed ones get a reply back out. Below, the learner adds and removes inbound rules.
+ * A second Start traffic button sits after all the controls, so on a phone you can edit and test
+ * without scrolling back up; it brings the stage into view.
  */
 export function TrafficGate({
   gate,
   onStart,
   outboundToggle = false,
   serverBadge,
+  startNote,
+  children,
 }: {
   gate: Gate
   onStart: () => void
@@ -98,10 +102,19 @@ export function TrafficGate({
   outboundToggle?: boolean
   /** Extra state drawn under the server, inside the ring. */
   serverBadge?: ReactNode
+  /** A short note shown beside each Start traffic button, such as "All set". */
+  startNote?: ReactNode
+  /** More controls, placed after the rules and before the lower Start traffic button. */
+  children?: ReactNode
 }) {
   const reduce = useReducedMotion() === true
   const { rules, run, live, outbound } = gate
   const anyIn = REQUESTS.some((r) => inboundAllowed(rules, r))
+  const stageRef = useRef<HTMLDivElement>(null)
+  const startFromBelow = () => {
+    onStart()
+    stageRef.current?.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' })
+  }
 
   const summary = live
     ? REQUESTS.map((r) => `${WHO[r.id].name}: ${inboundAllowed(rules, r) ? 'let in, reply sent back' : 'blocked'}.`).join(' ')
@@ -110,10 +123,13 @@ export function TrafficGate({
   return (
     <div className="min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <Button variant="primary" onClick={onStart}>
-          <Play aria-hidden />
-          Start traffic
-        </Button>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Button variant="primary" onClick={onStart}>
+            <Play aria-hidden />
+            Start traffic
+          </Button>
+          <span aria-live="polite">{startNote}</span>
+        </div>
         <p className="flex items-center gap-1.5 text-xs text-ink-3">
           <span aria-hidden className="size-3 rounded-[3px] border border-bad bg-bad-soft" />
           should stay out · each dot shows its <Term k="network-port">port</Term>
@@ -121,7 +137,7 @@ export function TrafficGate({
       </div>
 
       {/* The stage: lanes on the left, the security group ring on the right. Tracks end on the ring's edge. */}
-      <div className="mt-4 flex items-stretch">
+      <div ref={stageRef} className="mt-4 flex items-stretch">
         <ol className="grid min-w-0 flex-1 content-center gap-2 pb-1 pt-1 sm:pt-7" aria-label="Requests">
           {REQUESTS.map((r, i) => (
             <Lane key={r.id} req={r} index={i} allowed={inboundAllowed(rules, r)} live={live} run={run} reduce={reduce} />
@@ -149,21 +165,31 @@ export function TrafficGate({
           </p>
         ) : (
           <p className="mt-1.5 rounded-md border border-dashed border-line-strong px-3 py-2 text-sm text-ink-3">
-            None.{' '}
+            <b className="text-ink">None</b> ·{' '}
             {!live ? (
-              'Start traffic: do replies still get out?'
+              'start traffic: do replies still get out?'
             ) : anyIn ? (
               <>
-                Replies got out anyway: the group is <Term k="sg-stateful">stateful</Term>.
+                replies got out anyway, because the group is <Term k="sg-stateful">stateful</Term>
               </>
             ) : (
-              'Nothing got in, so there was nothing to reply to. Add a rule first.'
+              'nothing got in yet, so add a rule to see a reply'
             )}
           </p>
         )}
         {outboundToggle && (
           <Switch className="mt-2" label="Default outbound rule" checked={outbound} onChange={gate.setOutbound} />
         )}
+      </div>
+
+      {children}
+
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-4">
+        <Button variant="primary" onClick={startFromBelow}>
+          <Play aria-hidden />
+          Start traffic
+        </Button>
+        {startNote}
       </div>
     </div>
   )
@@ -373,7 +399,7 @@ function RuleEditor({ gate }: { gate: Gate }) {
         <h4 className="text-sm font-bold text-ink-2">
           Add an <Term k="sg-inbound-rule">inbound rule</Term>
         </h4>
-        <p className="text-xs text-ink-3">Rules can only allow. No matching rule, no entry.</p>
+        <p className="text-xs text-ink-3">Rules can only allow, so traffic with no matching rule stays out.</p>
         <div className="mt-2 grid gap-3">
           <Segmented<PortValue>
             label="Port"
@@ -447,14 +473,16 @@ function RuleEditor({ gate }: { gate: Gate }) {
                     {gate.live && (
                       <span className="block text-xs text-ink-3">
                         Let in:{' '}
-                        {letIn.length === 0
-                          ? 'nobody'
-                          : letIn.map((r, j) => (
-                              <span key={r.id} className={cn(!r.wanted && 'font-bold text-bad')}>
-                                {j > 0 && ', '}
-                                {WHO[r.id].name}
-                              </span>
-                            ))}
+                        {letIn.length === 0 ? (
+                          <span className="font-bold text-warn">nobody, an open door no one needs</span>
+                        ) : (
+                          letIn.map((r, j) => (
+                            <span key={r.id} className={cn(!r.wanted && 'font-bold text-bad')}>
+                              {j > 0 && ', '}
+                              {WHO[r.id].name}
+                            </span>
+                          ))
+                        )}
                       </span>
                     )}
                   </span>

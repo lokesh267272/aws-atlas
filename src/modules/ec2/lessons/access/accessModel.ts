@@ -89,12 +89,16 @@ export interface Checks {
   photosWithoutKey: boolean
 }
 
+/** True when the rule lets in at least one request that should get in. A rule that doesn't is an open door nobody needs. */
+export const ruleNeeded = (rule: Rule) => REQUESTS.some((r) => r.wanted && ruleMatches(rule, r))
+
 /** The challenge's live checklist. */
 export function checks(rules: Rule[], photos: PhotosAccess): Checks {
   return {
     customersIn: inboundAllowed(rules, byId('customer')),
     sshOfficeOnly: inboundAllowed(rules, byId('owner')) && !inboundAllowed(rules, byId('bot')),
-    nothingElse: REQUESTS.every((r) => r.wanted || !inboundAllowed(rules, r)),
+    // Nothing unwanted gets in, and no rule opens a door that no wanted request uses.
+    nothingElse: REQUESTS.every((r) => r.wanted || !inboundAllowed(rules, r)) && rules.every(ruleNeeded),
     photosWithoutKey: photos === 'role',
   }
 }
