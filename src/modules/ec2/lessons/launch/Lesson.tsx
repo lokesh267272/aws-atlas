@@ -23,8 +23,9 @@ export default function Lesson() {
         <LaunchBuilder />
         <Callout kind="real-aws">
           <p>
-            The launch page fills in most parts for you, and the <Term k="security-group">security group</Term> it
-            creates lets in only <Term k="ssh">SSH</Term>, from anywhere.
+            The launch page fills in most parts for you, and for Linux the new{' '}
+            <Term k="security-group">security group</Term> it creates lets in only <Term k="ssh">SSH</Term>, from
+            anywhere.
           </p>
         </Callout>
         <SetupDiagram step={1} />

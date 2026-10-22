@@ -36,7 +36,7 @@ const PUBLIC_IP = '203.0.113.24'
 const WHY: Record<LaunchPart, { name: string; why: string }> = {
   ami: { name: 'AMI', why: 'picks the operating system your server starts with.' },
   instanceType: { name: 'Instance type', why: 'sets how much CPU and memory you rent.' },
-  keyPair: { name: 'Key pair', why: 'decides whether you can log in over SSH.' },
+  keyPair: { name: 'Key pair', why: 'decides whether you can log in with your own key.' },
   securityGroup: { name: 'Security group', why: 'decides what traffic can reach the server.' },
   storage: { name: 'Storage', why: 'sizes the disk that holds the system and your app.' },
 }
@@ -256,13 +256,13 @@ export function LaunchBuilder() {
         state={challenge.state}
         hint={
           <>
-            Browsers send web traffic, so choose a security group option with <strong>Web</strong> in it, then launch
-            again.
+            Browsers send web traffic, so terminate, choose a security group option with <strong>Web</strong> in it,
+            then launch again.
           </>
         }
         onHint={challenge.hint}
         onShowMe={showMe}
-        successNote="It's running and its security group lets web traffic in, so browsers can load the menu."
+        successNote="It's running and its security group lets web traffic in, so browsers can reach it."
       />
 
       <div className="mt-5 grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]">
@@ -306,7 +306,7 @@ export function LaunchBuilder() {
             {config.keyPair === 'none' ? (
               <Pill tone="warn" className="mt-2">
                 <TriangleAlert aria-hidden />
-                Can&apos;t log in over SSH
+                No key to log in with
               </Pill>
             ) : (
               <p className={note}>
