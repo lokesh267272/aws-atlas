@@ -27,8 +27,9 @@ export default function Lesson() {
             years, and <Term k="reserved-instance">Reserved Instances</Term> are the older way to commit.
           </p>
         </Callout>
-        <SetupDiagram step={5} />
       </Section>
+
+      <SetupDiagram step={5} />
     </>
   )
 }

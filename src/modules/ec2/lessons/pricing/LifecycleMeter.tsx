@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useState, type ReactNode } from 'react'
 import { useReducedMotion } from 'motion/react'
-import { FastForward, HardDrive, Play, Server, Square, Tag, Trash2 } from 'lucide-react'
+import { FastForward, HardDrive, Play, Plus, Server, Square, Tag, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Bench } from '../../../../components/lesson'
 import { Button, Pill } from '../../../../components/controls'
@@ -8,10 +8,13 @@ import { Term } from '../../../../components/Term'
 import { categories } from '../../../../course/categories'
 import { cn } from '../../../../lib/cn'
 import { EBS_PER_GIB_MONTH, MIN_BILLED_SECONDS, PRICE_PER_SERVER_HOUR, billEbs } from './pricingModel'
+import { fineMoney, money } from './format'
 import { DISK_GIB, initialMeter, meterReducer, meterTotals, type Life } from './meterModel'
 
 /** Simulated seconds per real second: a minute passes in 6 seconds, so the 60-second minimum is easy to catch. */
 const SPEED = 10
+/** Simulated seconds added per tick, so the bench re-renders 5 times a second, not 10. */
+const TICK_SECONDS = 2
 /** The live clock runs for at most this long after each Start, Stop or Terminate press; Skip ahead covers longer spans. */
 const LIVE_MS = 60_000
 const DAY = 86400
@@ -48,9 +51,6 @@ function duration(seconds: number) {
   if (s || !m) parts.push(`${s} second${s === 1 ? '' : 's'}`)
   return parts.join(' ')
 }
-
-/** Tiny amounts need more digits to be seen moving. */
-const money = (n: number) => `$${n < 1 ? n.toFixed(5) : n.toFixed(2)}`
 
 const lifeLabel: Record<Life, { text: string; tone: 'neutral' | 'ok' | 'warn' | 'bad' }> = {
   none: { text: 'Not started', tone: 'neutral' },
@@ -92,7 +92,7 @@ function Meter({
       <div className="mt-2 text-sm text-ink-3">Billed time</div>
       <div className={cn('display text-2xl tabular-nums', on ? 'text-ink' : 'text-ink-3')}>{clock(billed)}</div>
       <div className="mt-0.5 text-sm tabular-nums text-ink-2">
-        {money(cost)} so far · {rate}
+        {fineMoney(cost)} so far · {rate}
       </div>
       <div className="mt-1 text-xs text-ink-3">{status}</div>
     </div>
@@ -114,7 +114,7 @@ export function LifecycleMeter() {
   const presses = s.presses
   useEffect(() => {
     if (!ticking) return
-    const id = window.setInterval(() => dispatch({ type: 'tick', seconds: 1 }), 1000 / SPEED)
+    const id = window.setInterval(() => dispatch({ type: 'tick', seconds: TICK_SECONDS }), (1000 * TICK_SECONDS) / SPEED)
     const rest = window.setTimeout(() => setRestingAt(presses), LIVE_MS)
     return () => {
       window.clearInterval(id)
@@ -173,6 +173,11 @@ export function LifecycleMeter() {
     dispatch({ type: 'terminate' })
     setMessage('Terminated. The server is gone and its root disk was deleted, so both meters stopped.')
   }
+  const minute = () => {
+    if (!alive) return
+    dispatch({ type: 'tick', seconds: 60 })
+    setMessage(running ? 'One minute later: both meters moved.' : 'One minute later: only the disk meter moved.')
+  }
   const skip = () => {
     if (!alive) return
     dispatch({ type: 'tick', seconds: DAY })
@@ -201,7 +206,7 @@ export function LifecycleMeter() {
             Example prices
           </Pill>
           <span className="tabular-nums">
-            server ${PRICE_PER_SERVER_HOUR['on-demand'].toFixed(2)}/hour · disk ${EBS_PER_GIB_MONTH.toFixed(2)} per GiB-month
+            server {money(PRICE_PER_SERVER_HOUR['on-demand'])}/hour · disk {money(EBS_PER_GIB_MONTH)} per <Term k="gib">GiB</Term>-month
           </span>
         </span>
       </div>
@@ -218,6 +223,9 @@ export function LifecycleMeter() {
         <Button variant="danger" aria-disabled={!alive} onClick={terminate}>
           <Trash2 aria-hidden />
           Terminate
+        </Button>
+        <Button variant="ghost" aria-disabled={!alive} onClick={minute}>
+          <Plus aria-hidden />1 minute
         </Button>
         <Button variant="ghost" aria-disabled={!alive} onClick={skip}>
           <FastForward aria-hidden />
@@ -238,12 +246,12 @@ export function LifecycleMeter() {
           cost={totals.serverCost}
           on={running}
           status={serverStatus[s.life]}
-          rate={running ? `$${PRICE_PER_SERVER_HOUR['on-demand'].toFixed(2)} per hour` : '$0 per hour'}
+          rate={running ? `${money(PRICE_PER_SERVER_HOUR['on-demand'])} per hour` : `${money(0, 0)} per hour`}
         />
         <Meter
           title={
             <>
-              Disk (<Term k="ebs-volume">EBS volume</Term>, {DISK_GIB} GiB)
+              Disk (<Term k="ebs-volume">EBS volume</Term>, {DISK_GIB} <Term k="gib">GiB</Term>)
             </>
           }
           icon={HardDrive}
@@ -252,7 +260,7 @@ export function LifecycleMeter() {
           cost={totals.diskCost}
           on={alive}
           status={diskStatus[s.life]}
-          rate={alive ? `$${billEbs(DISK_GIB, 1).toFixed(4)} per hour` : '$0 per hour'}
+          rate={alive ? `${fineMoney(billEbs(DISK_GIB, 1))} per hour` : `${money(0, 0)} per hour`}
         />
       </div>
 
