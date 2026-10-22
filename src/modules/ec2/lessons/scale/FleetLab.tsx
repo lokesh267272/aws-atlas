@@ -6,7 +6,8 @@ import { Bench } from '../../../../components/lesson'
 import { Term } from '../../../../components/Term'
 import { DayStrip } from './DayStrip'
 import { EventButtons, FleetControls, withLimits, type Knobs } from './FleetControls'
-import { recentRemoved, RegionView, screenTerms, statusLine } from './RegionView'
+import { money } from '../pricing/format'
+import { notableLine, recentRemoved, RegionView, screenTerms, statusLine } from './RegionView'
 import { DAY_TICKS, RUSH, simulateDay, solution, type FleetConfig, type FleetEvent } from './scaleModel'
 import { useDayPlayer } from './useDayPlayer'
 
@@ -26,8 +27,6 @@ const SETTLE: Record<FleetEvent['kind'], number> = {
  * failed server and its replacement both still show; a rush or an outage jumps to its settled end.
  */
 const SETTLE_REDUCED: Record<FleetEvent['kind'], number> = { ...SETTLE, 'instance-crash': 1, 'spot-interruption': 1 }
-
-const money = (n: number) => `$${n.toFixed(2)}`
 
 /** Visual A: a live fleet across three AZs. The learner triggers events and watches Auto Scaling and the load balancer react. */
 export function FleetLab() {
@@ -100,8 +99,10 @@ export function FleetLab() {
         />
       </div>
 
-      <p aria-live="polite" className="mt-3 min-h-[3em] text-screen-text sm:min-h-[1.5em]">
-        {status}
+      <p className="mt-3 min-h-[3em] text-screen-text sm:min-h-[1.5em]">{status}</p>
+      {/* Screen readers hear only events, Auto Scaling actions and the day's result, not every step. */}
+      <p aria-live="polite" className="sr-only">
+        {!started ? '' : dayOver ? status : (notableLine(day.ticks, at, cfg) ?? '')}
       </p>
 
       <div className="mt-3 grid gap-5 rounded-md bg-panel p-3 text-ink sm:p-4">

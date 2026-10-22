@@ -174,7 +174,7 @@ export function DemandPlanner() {
         <Challenge
           goal={
             <>
-              Run a month of {story.appName} for {dollars(BUDGET_PER_MONTH)} or less with zero lost orders.
+              Run a month of {story.appName} for {dollars(BUDGET_PER_MONTH)} or less with zero lost orders
             </>
           }
           checks={[
@@ -182,7 +182,8 @@ export function DemandPlanner() {
             { label: ordersCheck, done: done && estimate.ordersLost === 0 },
           ]}
           state={challenge.state}
-          stale={!(underBudget && estimate.ordersLost === 0)}
+          stale={phase !== 'playing' && !(underBudget && estimate.ordersLost === 0)}
+          staleReason={done ? 'failing' : 'changed'}
           hint={
             <>
               Commit only to the servers you need even at night, keep the rushes{' '}

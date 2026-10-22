@@ -35,6 +35,7 @@ export function Challenge({
   successNote,
   tone = 'light',
   stale = false,
+  staleReason = 'changed',
 }: {
   goal: ReactNode
   checks: { label: ReactNode; done: boolean }[]
@@ -48,6 +49,8 @@ export function Challenge({
   tone?: 'light' | 'screen'
   /** True when the learner changed their answer after solving it: swaps the success row for a "run it again" line. Optional; omit for the old behaviour. */
   stale?: boolean
+  /** Why it is stale: 'changed' (setup changed, not run yet) or 'failing' (the current setup ran and does not pass). */
+  staleReason?: 'changed' | 'failing'
 }) {
   const screen = tone === 'screen'
   const solvedRef = useRef<HTMLDivElement>(null)
@@ -140,7 +143,7 @@ export function Challenge({
         {state.solved && stale && (
           <p className={cn('mt-3 flex items-start gap-2 text-sm font-bold', screen ? 'text-screen-text' : 'text-warn')}>
             <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
-            <span>You changed it: run it again to check.</span>
+            <span>{staleReason === 'failing' ? "This setup doesn't pass yet." : 'You changed it: run it again to check.'}</span>
           </p>
         )}
         {state.solved && !stale && (

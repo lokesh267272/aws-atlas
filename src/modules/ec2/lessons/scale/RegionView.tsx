@@ -76,12 +76,19 @@ function actionLine(tick: Tick): string | null {
  * An event's line stays for EVENT_STEPS steps and an Auto Scaling action's for two, unless something newer happens.
  */
 export function statusLine(ticks: Tick[], at: number, cfg: FleetConfig): string {
+  return notableLine(ticks, at, cfg) ?? steadyLine(ticks, at, cfg)
+}
+
+/** The event or Auto Scaling line for step `at`, or null on a steady step. Only these are announced to screen readers. */
+export function notableLine(ticks: Tick[], at: number, cfg: FleetConfig): string | null {
   for (let k = 0; k < EVENT_STEPS && at - k >= 0; k++) {
     const line = eventLine(ticks[at - k], ticks[at - k - 1], cfg)
     if (line) return line
   }
-  const action = actionLine(ticks[at]) ?? (at > 0 ? actionLine(ticks[at - 1]) : null)
-  if (action) return action
+  return actionLine(ticks[at]) ?? (at > 0 ? actionLine(ticks[at - 1]) : null)
+}
+
+function steadyLine(ticks: Tick[], at: number, cfg: FleetConfig): string {
   const tick = ticks[at]
   if (!cfg.webOpen) return 'Web port closed: every customer is turned away'
   if (!fitsWebsite(cfg.instanceType)) return 'Too little memory: the website cannot run'
@@ -170,7 +177,7 @@ export function RegionView({
         <li className="flex items-center gap-1.5">
           <Dot color="var(--color-database)" />
           <span>
-            Order saved in the <Term k="rds">database</Term>
+            Order saved in the <Term k="rds">database</Term>, kept in sync with a <Term k="rds-standby">standby copy</Term>
           </span>
         </li>
         {!usesDb && (

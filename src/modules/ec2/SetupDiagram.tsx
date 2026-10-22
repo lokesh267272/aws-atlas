@@ -70,7 +70,7 @@ function SingleAz({ step }: { step: Step }) {
           <>
             <ServiceTile name="Website" category="compute" icon={Server} caption="Savings Plan" selected />
             <ServiceTile name="Route planning" category="compute" icon={Server} caption="Spot" selected />
-            <ServiceTile name="Busy-night extra" category="compute" icon={Server} caption="On-Demand" selected />
+            <ServiceTile name="Rush-hour extra" category="compute" icon={Server} caption="On-Demand" selected />
           </>
         ) : (
           <ServiceTile

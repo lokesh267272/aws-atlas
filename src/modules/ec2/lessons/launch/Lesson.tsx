@@ -23,8 +23,8 @@ export default function Lesson() {
         <LaunchBuilder />
         <Callout kind="real-aws">
           <p>
-            Linux launches get a new <Term k="security-group">security group</Term> that lets in{' '}
-            <Term k="ssh">SSH</Term> from anywhere.
+            For Linux, the console&apos;s launch page suggests a new <Term k="security-group">security group</Term> that
+            lets in <Term k="ssh">SSH</Term> from anywhere.
           </p>
         </Callout>
       </Section>

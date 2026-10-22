@@ -114,7 +114,7 @@ export function RoleVsKey() {
           <ArrowDown className="size-5 md:hidden" />
           <ArrowRight className="hidden size-5 md:block" />
           <span className="text-xs font-bold md:max-w-28 md:text-center">{key ? 'signed with the key' : 'signed with temporary credentials'}</span>
-          {/* The credential itself: the key just ages, a role's credential is swapped for a fresh one each week. */}
+          {/* The credential itself: the key just ages, a role's credentials are swapped for fresh ones automatically. */}
           <motion.span
             key={`${mode}-${days}`}
             initial={days > 0 && !reduce ? { opacity: 0, y: -6 } : false}
@@ -126,7 +126,7 @@ export function RoleVsKey() {
             )}
           >
             <KeyRound aria-hidden className="size-3" />
-            {key ? (days === 0 ? 'key, new' : `same key, ${days} days old`) : `credentials #${days / 7 + 1}, replaced`}
+            {key ? (days === 0 ? 'key, new' : `same key, ${days} days old`) : (days === 0 ? 'temporary credentials' : 'rotated many times, still fresh')}
           </motion.span>
         </div>
 

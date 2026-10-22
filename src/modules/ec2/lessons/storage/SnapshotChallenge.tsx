@@ -266,7 +266,8 @@ export function SnapshotChallenge() {
         </p>
 
         <Challenge
-          stale={challenge.state.solved && !(finished && run.ordersLost === 0)}
+          stale={challenge.state.solved && !running && !(finished && run.ordersLost === 0)}
+          staleReason={finished && run.ordersLost > 0 ? 'failing' : 'changed'}
           goal="Get through the day with zero lost orders"
           checks={[
             { label: 'No orders lost at the maintenance stop', done: survived('maintenance-stop') },

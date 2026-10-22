@@ -281,6 +281,17 @@ describe('challengeView: what the challenge panel shows', () => {
     expect(challengeView(failing, { ...idle, ran: true }).stale).toBe(false)
   })
 
+  it('names why it is stale: failing after a failed run, changed before any run', () => {
+    const solved = { ran: true, running: false, solved: true }
+    expect(challengeView(failing, solved).staleReason).toBe('failing')
+    expect(challengeView(failing, { ...solved, ran: false }).staleReason).toBe('changed')
+    expect(challengeView(pass, { ...solved, ran: false }).staleReason).toBe('changed')
+  })
+
+  it('is not stale while a run is in progress, even a failing build', () => {
+    expect(challengeView(failing, { ran: false, running: true, solved: true }).stale).toBe(false)
+  })
+
   it('is not stale while Show me plays the solution', () => {
     expect(challengeView(pass, { ran: false, running: true, solved: false }).stale).toBe(false)
     expect(challengeView(pass, { ran: false, running: true, solved: true }).stale).toBe(false)

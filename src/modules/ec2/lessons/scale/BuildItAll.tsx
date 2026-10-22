@@ -10,7 +10,8 @@ import { AMIS } from '../launch/launchModel'
 import { typeByName } from '../sizing/sizingModel'
 import { DayStrip } from './DayStrip'
 import { HealthChecksOn, MAX_RANGE, MIN_RANGE, OneAzNote, ORDERS_OPTIONS, withLimits } from './FleetControls'
-import { recentRemoved, RegionView, screenTerms, statusLine } from './RegionView'
+import { money } from '../pricing/format'
+import { notableLine, recentRemoved, RegionView, screenTerms, statusLine } from './RegionView'
 import {
   challengeView,
   DAY_BUDGET,
@@ -28,9 +29,8 @@ import { useDayPlayer } from './useDayPlayer'
 /** Types offered: the right-sized general one, a compute type too small in memory, a memory type, and a bigger size. */
 const TYPES = ['m7g.large', 'c7g.large', 'r7g.large', 'm7g.xlarge'] as const
 
-const money = (n: number) => `$${n.toFixed(2)}`
 /** Hourly prices need a third decimal: $0.048. */
-const rate = (n: number) => `$${Math.round(n * 1000) / 1000}`
+const rate = (n: number) => `${story.currency}${Math.round(n * 1000) / 1000}`
 
 const WHY: Record<LossReason, string> = {
   'no-ami': 'No AMI in the launch template',
@@ -162,6 +162,7 @@ export function BuildItAll() {
         ]}
         state={challenge.state}
         stale={view.stale}
+        staleReason={view.staleReason}
         hint={
           <>
             Pick an <Term k="ami">AMI</Term>, open the web port, span 3 <Term k="availability-zone">AZs</Term>, Min servers 3,
@@ -189,8 +190,10 @@ export function BuildItAll() {
         />
       </div>
 
-      <p aria-live="polite" className="mt-3 min-h-[3em] text-screen-text sm:min-h-[1.5em]">
-        {status}
+      <p className="mt-3 min-h-[3em] text-screen-text sm:min-h-[1.5em]">{status}</p>
+      {/* Screen readers hear only events, Auto Scaling actions and the result, not every step. */}
+      <p aria-live="polite" className="sr-only">
+        {running ? (notableLine(day.ticks, at, cfg) ?? '') : ran ? status : ''}
       </p>
 
       {/* The result sits under the stage, where Run scrolls to, so a phone shows why a day failed. */}
@@ -213,7 +216,15 @@ export function BuildItAll() {
 
       <div className="mt-3 grid gap-4 rounded-md bg-panel p-3 text-ink sm:p-4">
         <div className="grid gap-3 md:grid-cols-2">
-          <Group title={<Term k="launch-template">Launch template</Term>} note="The recipe for every new server">
+          <Group
+            title={<Term k="launch-template">Launch template</Term>}
+            note={
+              <>
+                The recipe for every new server, with a <Term k="security-group">security group</Term> for{' '}
+                <Term k="https">HTTPS</Term>
+              </>
+            }
+          >
             <Segmented
               label="AMI"
               size="sm"
@@ -240,11 +251,7 @@ export function BuildItAll() {
               )}
             </div>
             <Switch
-              label={
-                <span>
-                  <Term k="security-group">Security group</Term> lets <Term k="https">HTTPS</Term> 443 in
-                </span>
-              }
+              label="Let HTTPS 443 in from anywhere"
               checked={cfg.webOpen}
               onChange={(v) => set({ webOpen: v })}
             />

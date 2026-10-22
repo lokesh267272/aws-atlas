@@ -1,7 +1,6 @@
 import { useId, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { Check, Globe, Play, Route, X, Zap, type LucideIcon } from 'lucide-react'
-// The .tsx extension matters: on Windows "Challenge" also matches challenge.ts, which Vite tries first.
 import { Challenge, useChallenge } from '../../../../components/Challenge'
 import { Bench } from '../../../../components/lesson'
 import { Button, Pill, Segmented } from '../../../../components/controls'
@@ -147,6 +146,7 @@ export function SizingChallenge() {
             ]}
             state={challenge.state}
             stale={stale}
+            staleReason={ran && !res.solved ? 'failing' : 'changed'}
             hint="Give CPU-heavy work a c, memory-heavy work an r and balanced work an m, then pick the smallest size with no red."
             onHint={challenge.hint}
             onShowMe={showMe}

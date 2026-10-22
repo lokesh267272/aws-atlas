@@ -33,6 +33,14 @@ describe('ec2 module skeleton', () => {
     expect(checkTextBudget(renderToStaticMarkup(<Lesson />))).toEqual([])
   })
 
+  it.each(ec2.lessons.map((l) => l.id))('%s keeps glossary terms out of every label', async (id) => {
+    const { default: Lesson } = await getLesson('ec2', id)!.lesson.load()
+    const html = renderToStaticMarkup(<Lesson />)
+    // A glossary term is a button: inside a label, tapping it would toggle the control.
+    const labels = html.match(/<label[\s>][\s\S]*?<\/label>/g) ?? []
+    expect(labels.filter((l) => /class="(?:[^"]* )?term[ "]/.test(l))).toEqual([])
+  })
+
   it('setup diagram grows: no load balancer before step 6', () => {
     expect(renderToStaticMarkup(<SetupDiagram step={5} />)).not.toMatch(/load balancer/i)
     expect(renderToStaticMarkup(<SetupDiagram step={6} />)).toMatch(/load balancer/i)

@@ -447,13 +447,14 @@ export function judgeRun(cfg: FleetConfig): RunVerdict {
 /**
  * What the challenge panel shows for the build on screen.
  * Checks tick only after a run. "All set" means this build would pass but has not run yet.
- * A solved challenge goes stale when the build changes, until a passing build runs again (a run in progress is not stale).
+ * A solved challenge goes stale when the build changes, until a passing build runs again (a run in progress is not stale). staleReason is 'failing' when the day that ran did not pass.
  */
 export function challengeView(v: RunVerdict, s: { ran: boolean; running: boolean; solved: boolean }) {
   return {
     checks: { noLostOrders: s.ran && v.noLostOrders, underBudget: s.ran && v.underBudget },
     ready: v.passed && !s.ran && !s.running,
-    stale: s.solved && !(v.passed && (s.ran || s.running)),
+    stale: s.solved && !s.running && !(v.passed && s.ran),
+    staleReason: (s.ran && !v.passed ? 'failing' : 'changed') as 'changed' | 'failing',
   }
 }
 

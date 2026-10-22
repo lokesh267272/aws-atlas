@@ -239,7 +239,7 @@ export function LaunchBuilder() {
 
   return (
     <Bench
-      title="Try it"
+      title="Try it: launch a server"
       intro={
         <>
           Choose all five parts, press <strong className="text-ink-2">Launch</strong>, and notice which part decides
@@ -272,13 +272,14 @@ export function LaunchBuilder() {
         state={challenge.state}
         hint={
           <>
-            Browsers send web traffic, terminate the instance, choose a security group option with <strong>Web</strong> in it,
-            then launch again.
+            Browsers send web traffic, so terminate the instance, pick a security group option with <strong>Web</strong> in
+            it, and launch again.
           </>
         }
         onHint={challenge.hint}
         onShowMe={showMe}
-        stale={!reachable}
+        stale={!reachable && instance !== 'pending'}
+        staleReason={instance === 'running' ? 'failing' : 'changed'}
         successNote="It's running and its security group lets web traffic in (we assume a web server is installed)."
       />
 

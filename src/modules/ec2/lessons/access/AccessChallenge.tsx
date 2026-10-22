@@ -14,12 +14,15 @@ export function AccessChallenge() {
   const gate = useGate(challengeStart.rules)
   const [photos, setPhotos] = useState<Photos>(challengeStart.photos)
   const challenge = useChallenge()
+  /** The photo access the last traffic run used: a later change makes that run out of date. */
+  const [tested, setTested] = useState<Photos | null>(null)
   const c = checks(gate.rules, photos)
   // Every check is ticked but the run that proves it hasn't happened yet.
   const ready = solved(c) && !challenge.state.solved
 
   const start = () => {
     gate.start()
+    setTested(photos)
     if (solved(c)) challenge.solve()
     else challenge.fail()
   }
@@ -54,6 +57,7 @@ export function AccessChallenge() {
         ]}
         state={challenge.state}
         stale={challenge.state.solved && !solved(c)}
+        staleReason={gate.live && tested === photos ? 'failing' : 'changed'}
         hint="Only the office needs SSH, and a role replaces the key."
         onHint={challenge.hint}
         onShowMe={showMe}
