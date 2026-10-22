@@ -1,0 +1,133 @@
+import { useCallback, useMemo, useReducer, useState, type ReactNode } from 'react'
+import { Check, Circle, Lightbulb, Target } from 'lucide-react'
+import { cn } from '../lib/cn'
+import { Button, Pill } from './controls'
+import {
+  canHint,
+  canShow,
+  challengeReducer,
+  initialChallenge,
+  type ChallengeState,
+} from './challenge'
+
+/** Hook holding challenge progress. Call fail() on a miss, solve() on success, show() after applying the solution. */
+export function useChallenge() {
+  const [state, dispatch] = useReducer(challengeReducer, initialChallenge)
+  const fail = useCallback(() => dispatch({ type: 'fail' }), [])
+  const solve = useCallback(() => dispatch({ type: 'solve' }), [])
+  const show = useCallback(() => dispatch({ type: 'show' }), [])
+  const reset = useCallback(() => dispatch({ type: 'reset' }), [])
+  return useMemo(() => ({ state, fail, solve, show, reset }), [state, fail, solve, show, reset])
+}
+
+const darkButton =
+  'inline-flex h-8 items-center gap-1.5 rounded-md border border-screen-line bg-screen-2 px-2.5 text-sm font-bold text-screen-text transition-colors hover:border-screen-dim hover:text-white focus-visible:outline-[#5fb3e6] [&_svg]:size-4'
+
+/** The shared challenge panel: a goal, a live checklist, a hint, a Show me escape hatch and a success note. */
+export function Challenge({
+  goal,
+  checks,
+  state,
+  hint,
+  onShowMe,
+  successNote,
+  tone = 'light',
+}: {
+  goal: ReactNode
+  checks: { label: ReactNode; done: boolean }[]
+  state: ChallengeState
+  hint: ReactNode
+  /** Apply the lesson's solution, then call show(). */
+  onShowMe: () => void
+  successNote: ReactNode
+  tone?: 'light' | 'screen'
+}) {
+  const screen = tone === 'screen'
+  const [hintOpen, setHintOpen] = useState(false)
+  const hintAvailable = canHint(state)
+  const showAvailable = canShow(state)
+
+  return (
+    <div
+      className={cn(
+        'min-w-0 rounded-lg border p-3 sm:p-4',
+        screen ? 'border-screen-line bg-screen-2 text-screen-text' : 'border-line bg-panel text-ink',
+      )}
+    >
+      <p className="flex items-start gap-2 text-base font-bold">
+        <Target aria-hidden className={cn('mt-0.5 size-5 shrink-0', screen ? 'text-screen-accent' : 'text-signal')} />
+        <span>{goal}</span>
+      </p>
+
+      <ul className="mt-3 grid gap-1.5">
+        {checks.map((c, i) => (
+          <li
+            key={i}
+            className={cn(
+              'flex items-start gap-2 text-sm',
+              c.done ? (screen ? 'text-screen-text' : 'text-ink') : screen ? 'text-screen-dim' : 'text-ink-3',
+            )}
+          >
+            {c.done ? (
+              <Check aria-hidden className={cn('mt-0.5 size-4 shrink-0', screen ? 'text-screen-accent' : 'text-ok')} />
+            ) : (
+              <Circle aria-hidden className="mt-0.5 size-4 shrink-0" />
+            )}
+            <span>
+              {c.label}
+              <span className="sr-only">{c.done ? ' (done)' : ' (not done)'}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {(hintAvailable || showAvailable) && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {hintAvailable &&
+            (screen ? (
+              <button type="button" className={darkButton} onClick={() => setHintOpen(true)} aria-expanded={hintOpen}>
+                <Lightbulb aria-hidden />
+                Hint
+              </button>
+            ) : (
+              <Button size="sm" onClick={() => setHintOpen(true)} aria-expanded={hintOpen}>
+                <Lightbulb aria-hidden />
+                Hint
+              </Button>
+            ))}
+          {showAvailable &&
+            (screen ? (
+              <button type="button" className={darkButton} onClick={onShowMe}>
+                Show me
+              </button>
+            ) : (
+              <Button size="sm" onClick={onShowMe}>
+                Show me
+              </Button>
+            ))}
+        </div>
+      )}
+
+      {hintAvailable && hintOpen && (
+        <p className={cn('mt-2 text-sm', screen ? 'text-screen-text' : 'text-ink-2')}>{hint}</p>
+      )}
+
+      <div aria-live="polite">
+        {state.solved && (
+          <div
+            className={cn(
+              'mt-3 flex items-start gap-2 rounded-md p-2.5 text-sm',
+              screen ? 'border border-screen-line text-screen-text' : 'bg-ok-soft text-ink',
+            )}
+          >
+            <Pill tone="ok" className="shrink-0">
+              <Check aria-hidden />
+              Solved
+            </Pill>
+            <span>{successNote}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
