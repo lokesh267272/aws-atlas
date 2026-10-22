@@ -118,7 +118,7 @@ export function Bench({
         <SquareMousePointer aria-hidden className={cn('mt-1 size-4 shrink-0', screen ? 'text-screen-accent' : 'text-signal')} />
         <div className="min-w-[min(100%,15rem)] flex-1">
           <h3 className={cn('text-base font-bold', screen ? 'text-white' : 'text-ink')}>{title}</h3>
-          {intro && <div className={cn('mt-0.5 max-w-[72ch] text-sm', screen ? 'text-screen-dim' : 'text-ink-3')}>{intro}</div>}
+          {intro && <div data-caption="" className={cn('mt-0.5 max-w-[72ch] text-sm', screen ? 'text-screen-dim' : 'text-ink-3')}>{intro}</div>}
         </div>
         {onReset && (
           <Button
