@@ -32,7 +32,13 @@ export function SetupDiagram({ step }: { step: Step }) {
               }>
               {step >= 4 && (
                 <div className="mb-3 flex flex-wrap gap-x-3 gap-y-2">
-                  <ServiceTile name="Security group" category="security" icon={ShieldCheck} selected={step === 4} />
+                  <ServiceTile
+                    name="Security group"
+                    category="security"
+                    icon={ShieldCheck}
+                    caption="wraps the server"
+                    selected={step === 4}
+                  />
                 </div>
               )}
               {step === 6 ? <ScaledOut /> : <SingleAz step={step} />}

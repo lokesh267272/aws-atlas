@@ -1,6 +1,6 @@
 /** Shared story constants for Module 2. */
 export const story = {
-  /** Invented name for the food delivery app. Not a real brand. */
+  /** Invented name; no major brand uses it. */
   appName: 'Mealhop',
   regionCode: 'ap-south-1',
   regionName: 'Asia Pacific (Mumbai)',

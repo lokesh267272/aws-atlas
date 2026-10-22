@@ -28,7 +28,7 @@ describe('ec2 module skeleton', () => {
     expect(Object.keys(ec2.terms).filter((k) => taken.has(k))).toEqual([])
   })
 
-  it.each(['launch', 'sizing', 'storage', 'access', 'pricing', 'scale'])('%s stays within the text budget', async (id) => {
+  it.each(ec2.lessons.map((l) => l.id))('%s stays within the text budget', async (id) => {
     const { default: Lesson } = await getLesson('ec2', id)!.lesson.load()
     expect(checkTextBudget(renderToStaticMarkup(<Lesson />))).toEqual([])
   })
@@ -52,6 +52,7 @@ describe('ec2 module skeleton', () => {
     // step 4: only the security group is highlighted (the server role too)
     expect(highlighted(at(4))).toBe(2)
     expect(at(4)).toMatch(/Security group/)
+    expect(at(4)).toContain('wraps the server')
   })
 
   it('keeps the server role (IAM is global) outside the Region', () => {
@@ -85,7 +86,8 @@ describe('ec2 module skeleton', () => {
     const registry = await import('../../course/registry')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      for (const id of ['launch', 'sizing', 'storage', 'access', 'pricing', 'scale']) {
+      // Only Terms rendered on first render are covered (not ones revealed after interaction).
+      for (const { id } of ec2.lessons) {
         const { default: Lesson } = await registry.getLesson('ec2', id)!.lesson.load()
         render(createElement(Lesson))
       }
