@@ -1,4 +1,4 @@
-import { Component, Suspense, lazy, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { cn } from '../lib/cn'
 
 const Scene3DCanvas = lazy(() => import('./Scene3DCanvas'))
@@ -16,14 +16,17 @@ export function hasWebGL(): boolean {
   }
 }
 
-/** Shows the fallback instead of crashing the lesson if the 3D view throws. */
-class SceneBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+/** Catches a throwing 3D view and tells the parent, which then shows the fallback outside the clipped stage. */
+class SceneBoundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
   static getDerivedStateFromError() {
     return { failed: true }
   }
+  componentDidCatch() {
+    this.props.onError()
+  }
   render() {
-    return this.state.failed ? this.props.fallback : this.props.children
+    return this.state.failed ? null : this.props.children
   }
 }
 
@@ -53,29 +56,46 @@ export type Scene3DViewProps = {
   height?: string
 }
 
-/** Dark stage that lazy-loads an r3f Canvas, pauses off-screen, and shows `fallback` without WebGL or on error. */
+/** Dark stage that lazy-loads an r3f Canvas, pauses off-screen, and shows `fallback` without WebGL, on error or on context loss. The fallback is not clipped: it can grow taller than the stage. */
 export function Scene3DView({ webgl, label, fallback, children, height = 'h-[320px] sm:h-[420px]' }: Scene3DViewProps) {
   const stageRef = useRef<HTMLDivElement>(null)
   const inView = useInView(stageRef)
+  const [broken, setBroken] = useState(false)
+  const onLost = useCallback(() => setBroken(true), [])
+  const showFallback = webgl === false || broken
 
   return (
-    <div ref={stageRef} className={cn('relative overflow-hidden rounded-md border border-screen-line bg-screen text-screen-text', height)}>
-      {webgl === true ? (
-        <SceneBoundary fallback={fallback}>
-          <div role="img" aria-label={label} className="absolute inset-0">
-            <Suspense fallback={<p className="p-4 text-sm text-screen-dim">Loading the 3D viewâ€¦</p>}>
-              <Scene3DCanvas active={inView}>{children}</Scene3DCanvas>
-            </Suspense>
-          </div>
-        </SceneBoundary>
-      ) : webgl === false ? (
+    <div
+      ref={stageRef}
+      className={cn(
+        'relative rounded-md border border-screen-line bg-screen text-screen-text',
+        !showFallback && 'overflow-hidden',
+        !showFallback && height,
+      )}
+    >
+      {showFallback ? (
         fallback
+      ) : webgl === true ? (
+        <SceneBoundary onError={onLost}>
+          {/* The loading text sits outside role="img" so it is announced */}
+          <Suspense fallback={<p role="status" className="p-4 text-sm text-screen-dim">Loading the 3D view…</p>}>
+            <div role="img" aria-label={label} className="absolute inset-0">
+              <Scene3DCanvas active={inView} onLost={onLost}>
+                {children}
+              </Scene3DCanvas>
+            </div>
+          </Suspense>
+        </SceneBoundary>
       ) : null}
     </div>
   )
 }
 
-/** Detects WebGL after mount, then renders Scene3DView. */
+/**
+ * Detects WebGL after mount, then renders Scene3DView.
+ * Contract: the frameloop is 'demand'. Scenes render one frame per state change; scenes that animate must call
+ * invalidate() from useFrame while the animation runs. While off-screen the loop is paused and one frame is queued on return.
+ */
 export function Scene3D(props: Omit<Scene3DViewProps, 'webgl'>) {
   const [webgl, setWebgl] = useState<boolean | null>(null)
   useEffect(() => setWebgl(hasWebGL()), [])
