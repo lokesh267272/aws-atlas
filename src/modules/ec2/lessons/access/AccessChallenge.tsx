@@ -1,0 +1,108 @@
+import { useState } from 'react'
+import { Check, HardHat, KeyRound } from 'lucide-react'
+import { Bench } from '../../../../components/lesson'
+import { Pill, Segmented } from '../../../../components/controls'
+import { Challenge, useChallenge } from '../../../../components/Challenge'
+import { Term } from '../../../../components/Term'
+import { challengeStart, checks, solution, solved, type PhotosAccess } from './accessModel'
+import { TrafficGate, useGate } from './TrafficGate'
+
+type Photos = Exclude<PhotosAccess, null>
+
+/** "Challenge: lock it down": fix a setup that is too open, then press Start traffic to test it. */
+export function AccessChallenge() {
+  const gate = useGate(challengeStart.rules)
+  const [photos, setPhotos] = useState<Photos>(challengeStart.photos)
+  const challenge = useChallenge()
+  /** The photo access the last traffic run used: a later change makes that run out of date. */
+  const [tested, setTested] = useState<Photos | null>(null)
+  const c = checks(gate.rules, photos)
+  // Every check is ticked but the run that proves it hasn't happened yet.
+  const ready = solved(c) && !challenge.state.solved
+
+  const start = () => {
+    gate.start()
+    setTested(photos)
+    if (solved(c)) challenge.solve()
+    else challenge.fail()
+  }
+  const showMe = () => {
+    gate.apply(solution.rules)
+    setPhotos(solution.photos)
+    challenge.show()
+  }
+  const reset = () => {
+    gate.reset()
+    setPhotos(challengeStart.photos)
+    challenge.reset()
+  }
+
+  return (
+    <Bench
+      title="Try it: lock down the server"
+      intro={
+        <>
+          Fix the <Term k="security-group">security group</Term> and the photo access, then press Start traffic to test it.
+        </>
+      }
+      onReset={reset}
+    >
+      <Challenge
+        goal="Lock down the server"
+        checks={[
+          { label: <>Customers get in on <Term k="https">HTTPS</Term> (443)</>, done: c.customersIn },
+          { label: <><Term k="ssh">SSH</Term> (22) works only from the office</>, done: c.sshOfficeOnly },
+          { label: 'Nothing else can get in, and no rule is left unused', done: c.nothingElse },
+          { label: 'The app reaches the photos without a stored key', done: c.photosWithoutKey },
+        ]}
+        state={challenge.state}
+        stale={challenge.state.solved && !solved(c)}
+        staleReason={gate.live && tested === photos ? 'failing' : 'changed'}
+        hint="Only the office needs SSH, and a role replaces the key."
+        onHint={challenge.hint}
+        onShowMe={showMe}
+        successNote="Only two doors are open, and the app borrows short-lived credentials instead of keeping a key."
+      />
+
+      <div className="mt-5">
+        <TrafficGate
+          gate={gate}
+          onStart={start}
+          startNote={
+            ready && (
+              <Pill tone="ok">
+                <Check aria-hidden />
+                All set: press Start traffic
+              </Pill>
+            )
+          }
+          serverBadge={
+            photos === 'role' ? (
+              <Pill tone="ok" className="max-w-full whitespace-normal text-center leading-tight [&_svg]:shrink-0">
+                <HardHat aria-hidden />
+                Role attached
+              </Pill>
+            ) : (
+              <Pill tone="warn" className="max-w-full whitespace-normal text-center leading-tight [&_svg]:shrink-0">
+                <KeyRound aria-hidden />
+                Key on disk
+              </Pill>
+            )
+          }
+        >
+          <div className="mt-4 border-t border-line pt-4">
+            <Segmented<Photos>
+              label="How the app reaches the menu photos"
+              value={photos}
+              onChange={setPhotos}
+              options={[
+                { value: 'access-key', label: 'Paste an access key' },
+                { value: 'role', label: 'Attach a role' },
+              ]}
+            />
+          </div>
+        </TrafficGate>
+      </div>
+    </Bench>
+  )
+}
