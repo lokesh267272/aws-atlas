@@ -22,7 +22,7 @@ const screenTerms =
 const sceneLabel: Record<HostStage, string> = {
   whole: 'A rack of servers in a data center. The top one is a single physical server.',
   split:
-    'The top server slides out of the rack. The Nitro System layer splits it into four instances: three for other customers, A, B and C, and one free slot.',
+    'The top server slides out of the rack. The Nitro System splits it into four instances: three for other customers, A, B and C, and one free slot.',
   rented: `The free slot is now your instance, in orange, between other customers' instances. A dashed boundary marks Availability Zone ${story.azs[0]}.`,
 }
 
@@ -103,10 +103,10 @@ export function HostExplorer() {
 
       <ul aria-label="Legend" className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-screen-dim">
         <li className="flex items-center gap-1.5">
-          <Swatch kind="nitro" /> Nitro System: the <Term k="hypervisor">hypervisor</Term> layer
+          <Swatch kind="nitro" /> Nitro System: hardware + <Term k="hypervisor">hypervisor</Term> layer
         </li>
         <li className="flex items-center gap-1.5">
-          <Swatch kind="other" /> Another customer&apos;s instance
+          <Swatch kind="other" /> Another customer&apos;s isolated instance
         </li>
         <li className="flex items-center gap-1.5">
           <Swatch kind="free" /> Free space
@@ -115,7 +115,7 @@ export function HostExplorer() {
           <Swatch kind="you" /> Your instance
         </li>
         <li className="flex items-center gap-1.5">
-          <Swatch kind="az" /> Availability Zone
+          <Swatch kind="az" /> <Term k="availability-zone">Availability Zone</Term>
         </li>
       </ul>
     </Bench>

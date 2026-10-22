@@ -67,7 +67,7 @@ export const AMIS = [
   { value: 'debian', label: 'Debian' },
 ] as const
 
-/** Real sizes (virtual CPUs, memory in GiB). Each step up roughly doubles, which lesson 2 explores. */
+/** Real sizes (virtual CPUs, memory in GiB). Within a family each size up doubles (m5.large to m5.xlarge), which lesson 2 explores. */
 export const INSTANCE_TYPES = [
   { value: 't3.micro', vcpu: 2, memGiB: 1 },
   { value: 'm5.large', vcpu: 2, memGiB: 8 },
@@ -93,5 +93,5 @@ export function securityGroupChoice(sg: LaunchConfig['securityGroup']): Security
   return sg.sshFromAnywhere ? 'ssh' : 'nothing'
 }
 
-/** Root volume sizes in GiB. The Linux images above start from an 8 GiB root volume, so all of these fit. */
+/** Root volume sizes in GiB. Quick-start Linux images usually start at 8 GiB, so all of these fit. */
 export const STORAGE_SIZES = [8, 20, 50] as const
