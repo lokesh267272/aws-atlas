@@ -7,10 +7,10 @@
 
 export type PriceModel = 'on-demand' | 'savings-plan' | 'spot'
 
-/** Example price of one server for one hour, in dollars. Spot is 0.3x On-Demand; the Savings Plan sits in between. */
+/** Example price of one server for one hour, in dollars. Spot is 0.3x On-Demand; the Savings Plan rate sits in between. */
 export const PRICE_PER_SERVER_HOUR: Record<PriceModel, number> = {
   'on-demand': 0.1,
-  'savings-plan': 0.05,
+  'savings-plan': 0.06,
   spot: 0.03,
 }
 
@@ -40,8 +40,8 @@ export function billEbs(gib: number, hours: number): number {
   return (gib * EBS_PER_GIB_MONTH * hours) / HOURS_PER_MONTH
 }
 
-/** Servers needed for live orders, for each hour of the day (index 0 = midnight to 1 am). */
-export const DEMAND: number[] = [2, 2, 2, 2, 2, 2, 3, 3, 4, 4, 5, 7, 9, 8, 5, 4, 4, 5, 8, 10, 9, 6, 4, 3]
+/** Servers needed for live orders, for each hour of the day (index 0 = midnight to 1 am). Quiet until 9 am. */
+export const DEMAND: number[] = [2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 5, 8, 7, 4, 3, 3, 4, 7, 9, 8, 5, 3, 2]
 
 /** The nightly route-planning job: starts at 1 am, runs 4 hours on 6 servers. It can rerun if interrupted. */
 export const BATCH = { start: 1, hours: 4, servers: 6 } as const
@@ -52,10 +52,13 @@ export const ORDERS_PER_SERVER_HOUR = 25
 /** Hours of the day when AWS takes Spot capacity back once this month: one quiet night, one busy evening. */
 export const INTERRUPT_HOURS: readonly number[] = [3, 19]
 
-export const BUDGET_PER_MONTH = 300
+export const BUDGET_PER_MONTH = 260
 
 export interface Plan {
-  /** Servers covered by a Savings Plan: paid for every hour, used or not. */
+  /**
+   * The Savings Plan commitment, in servers' worth per hour (each at the Savings Plan rate).
+   * Paid every hour, used or not. It covers On-Demand-type usage only, never Spot.
+   */
   savingsPlanServers: number
   /** How to pay for live servers above the Savings Plan. */
   peaks: 'on-demand' | 'spot'
@@ -63,20 +66,28 @@ export interface Plan {
   batch: 'on-demand' | 'spot'
 }
 
-/** Savings Plan for the always-on night minimum, On-Demand for the rushes, Spot for the batch job. */
+/** Commit to the always-on night minimum, On-Demand for the rushes, Spot for the batch job. */
 export const solution: Plan = { savingsPlanServers: Math.min(...DEMAND), peaks: 'on-demand', batch: 'spot' }
 
 export const inBatch = (h: number) => h >= BATCH.start && h < BATCH.start + BATCH.hours
 
-/** Servers in each band for one hour of the day. spUsed + peak always equals live demand. */
+/**
+ * Servers in each band for one hour of the day.
+ * Live orders use the commitment first (spUsed), and servers above it are paid by `peaks` (peak).
+ * An On-Demand batch then uses any commitment left this hour (spBatch); the rest of the batch is paid by `batch`.
+ * Spot is never covered by the commitment. Whatever is left is unused but still paid (spIdle).
+ */
 export function hourBands(p: Plan, h: number) {
   const live = DEMAND[h]
   const spUsed = Math.min(p.savingsPlanServers, live)
+  const batchNeed = inBatch(h) ? BATCH.servers : 0
+  const spBatch = p.batch === 'on-demand' ? Math.min(p.savingsPlanServers - spUsed, batchNeed) : 0
   return {
     spUsed,
-    spIdle: p.savingsPlanServers - spUsed,
     peak: live - spUsed,
-    batch: inBatch(h) ? BATCH.servers : 0,
+    spBatch,
+    batch: batchNeed - spBatch,
+    spIdle: p.savingsPlanServers - spUsed - spBatch,
   }
 }
 

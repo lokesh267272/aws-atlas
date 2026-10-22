@@ -48,6 +48,8 @@ type BlockKind = 'sp' | 'idle' | 'od' | 'spot' | 'lost' | 'rerun'
 const money = (n: number) => `$${n.toFixed(2)}`
 const dollars = (n: number) => `$${Math.round(n)}`
 const pay = (m: 'on-demand' | 'spot') => (m === 'spot' ? 'Spot' : 'On-Demand')
+/** "1 server's worth", "3 servers' worth" */
+const worth = (n: number) => (n === 1 ? "1 server's worth" : `${n} servers' worth`)
 
 /** "3 am", "noon", "7 pm" */
 function hourName(h: number) {
@@ -127,8 +129,9 @@ function DayChart({
       for (let i = 0; i < n; i++) blocks.push({ h, row: row++, kind })
     }
     push(b.spUsed, 'sp')
-    push(b.spIdle, 'idle')
     push(b.peak, plan.peaks === 'on-demand' ? 'od' : lostHours.has(h) ? 'lost' : 'spot')
+    push(b.spBatch, 'sp')
+    push(b.spIdle, 'idle')
     push(b.batch, plan.batch === 'spot' ? 'spot' : 'od')
     if (rerun && h === RERUN_HOUR) push(BATCH.servers, 'rerun')
   }
@@ -265,8 +268,8 @@ function BillBar({ plan, upToHour }: { plan: Plan; upToHour: number }) {
   const hatch = `${useId().replace(/[^a-zA-Z0-9_-]/g, '')}-bar`
   const bill = monthBill(plan, { upToHour })
   const parts: { kind: BlockKind; value: number; label: string }[] = [
-    { kind: 'sp', value: bill.savingsPlan - bill.savingsPlanIdle, label: 'Savings Plan, used' },
-    { kind: 'idle', value: bill.savingsPlanIdle, label: 'Savings Plan, idle' },
+    { kind: 'sp', value: bill.savingsPlan - bill.savingsPlanIdle, label: 'Commitment used' },
+    { kind: 'idle', value: bill.savingsPlanIdle, label: 'Commitment unused, still paid' },
     { kind: 'od', value: bill.onDemand, label: 'On-Demand' },
     { kind: 'spot', value: bill.spot, label: 'Spot' },
   ]
@@ -308,7 +311,7 @@ function BillBar({ plan, upToHour }: { plan: Plan; upToHour: number }) {
         </span>
       </div>
       {bill.savingsPlanIdle > 0 && (
-        <p className="text-xs text-warn">Paid for idle Savings Plan servers: {money(bill.savingsPlanIdle)}</p>
+        <p className="text-xs text-warn">Commitment unused, still paid: {money(bill.savingsPlanIdle)}</p>
       )}
     </div>
   )
@@ -422,11 +425,13 @@ export function DemandPlanner() {
   const price = PRICE_PER_SERVER_HOUR
   const usesSpot = plan.peaks === 'spot' || plan.batch === 'spot'
 
-  const chartLabel = `One day of ${story.appName}, repeated for ${DAYS_PER_MONTH} days. Servers needed for live orders: ${DEMAND[3]} at night, ${DEMAND[12]} at the lunch rush and ${DEMAND[19]} at the dinner rush. ${
-    plan.savingsPlanServers
-  } Savings Plan servers run every hour. Servers above them are ${pay(plan.peaks)}. The route-planning job uses ${BATCH.servers} ${pay(
+  const chartLabel = `One day of ${story.appName}, repeated for ${DAYS_PER_MONTH} days. Servers needed for live orders: ${DEMAND[3]} at night, ${DEMAND[12]} at the lunch rush and ${DEMAND[19]} at the dinner rush. A Savings Plan commitment of ${worth(
+    plan.savingsPlanServers,
+  )} is paid every hour. Live servers above it are ${pay(plan.peaks)}. The route-planning job uses ${BATCH.servers} ${pay(
     plan.batch,
-  )} servers from ${hourName(BATCH.start)} to ${hourName(BATCH.start + BATCH.hours)}.`
+  )} servers from ${hourName(BATCH.start)} to ${hourName(BATCH.start + BATCH.hours)}${
+    plan.batch === 'on-demand' ? ', using any commitment the live orders leave unused' : ', and Spot never uses the commitment'
+  }.`
 
   const ordersCheck = !done
     ? 'No orders lost (run the month to check)'
@@ -439,8 +444,8 @@ export function DemandPlanner() {
       title={`Try it: pay for a month of ${story.appName}`}
       intro={
         <>
-          Put the always-on servers on a <Term k="savings-plan">Savings Plan</Term> and choose how to pay for the rest,
-          then run the month.
+          Set a <Term k="savings-plan">Savings Plan</Term> commitment for the always-on servers, choose how to pay for
+          the rest, then run the month.
         </>
       }
       onReset={reset}
@@ -448,15 +453,15 @@ export function DemandPlanner() {
       <div className="grid gap-4 sm:grid-cols-2">
         <Slider
           className="sm:col-span-2"
-          label="Savings Plan servers (paid every hour)"
+          label="Savings Plan commitment (servers' worth per hour)"
           value={plan.savingsPlanServers}
           min={0}
           max={MAX_SP}
           onChange={(v) => change({ savingsPlanServers: v })}
-          format={(v) => `${v} server${v === 1 ? '' : 's'}`}
+          format={(v) => `${worth(v)}, ${money(v * PRICE_PER_SERVER_HOUR['savings-plan'])}/hour`}
         />
         <Segmented<Plan['peaks']>
-          label="Servers above the Savings Plan"
+          label="Live servers above the commitment"
           value={plan.peaks}
           onChange={(v) => change({ peaks: v })}
           options={[
@@ -488,11 +493,13 @@ export function DemandPlanner() {
       <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-ink-2">
         <li className="flex items-center gap-1.5">
           <Swatch kind="sp" />
-          <Term k="savings-plan">Savings Plan</Term>
+          <span>
+            Covered by the <Term k="savings-plan">Savings Plan</Term>
+          </span>
         </li>
         <li className="flex items-center gap-1.5">
           <Swatch kind="idle" />
-          Savings Plan, idle but paid
+          Commitment unused, still paid
         </li>
         <li className="flex items-center gap-1.5">
           <Swatch kind="od" />
@@ -515,7 +522,9 @@ export function DemandPlanner() {
       <div ref={chartBox} role="img" aria-label={chartLabel} className="mt-3 rounded-md border border-line bg-panel p-1">
         <DayChart plan={plan} t={t} playing={phase === 'playing'} played={phase !== 'idle'} labelSize={labelSize} />
       </div>
-      <p className="mt-1 text-xs text-ink-3">1 block = 1 server for 1 hour, every day of the month.</p>
+      <p className="mt-1 text-xs text-ink-3">
+        1 block = 1 server for 1 hour, every day of the month; each 2-minute warning happens once this month.
+      </p>
 
       {phase !== 'idle' && (passed.length > 0 || done) && (
         <ul className="mt-3 grid gap-1.5">
@@ -526,8 +535,8 @@ export function DemandPlanner() {
               </Pill>
               <span>
                 {i.hits === 'live'
-                  ? `${hourName(i.hour)}: AWS took back ${i.servers} Spot servers taking orders. ${i.ordersLost} orders lost.`
-                  : `${hourName(i.hour)}: AWS took back the route-planning servers, so the job reran. No orders lost.`}
+                  ? `Once this month at ${hourName(i.hour)}, AWS took back ${i.servers} Spot servers taking orders and ${i.ordersLost} orders were lost.`
+                  : `Once this month at ${hourName(i.hour)}, AWS took back the route-planning servers and the job reran with no orders lost.`}
               </span>
             </li>
           ))}
@@ -582,10 +591,10 @@ export function DemandPlanner() {
             { label: ordersCheck, done: done && estimate.ordersLost === 0 },
           ]}
           state={challenge.state}
-          hint="Commit only the servers busy all night, keep the rushes On-Demand, and give the night job to Spot."
+          hint="Commit only to the servers you need even at night, keep the rushes On-Demand, and give the night job to Spot."
           onHint={challenge.hint}
           onShowMe={showMe}
-          successNote="The Savings Plan covers servers that are never idle, On-Demand covers the rushes, and Spot runs the job that can simply rerun."
+          successNote="A small commitment stays in use all day, On-Demand covers the rushes, and Spot runs the job that can simply rerun."
         />
       </div>
 

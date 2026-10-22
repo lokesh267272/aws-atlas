@@ -1,4 +1,5 @@
-import { useEffect, useReducer, type ReactNode } from 'react'
+import { useEffect, useReducer, useState, type ReactNode } from 'react'
+import { useReducedMotion } from 'motion/react'
 import { FastForward, HardDrive, Play, Server, Square, Tag, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Bench } from '../../../../components/lesson'
@@ -6,68 +7,25 @@ import { Button, Pill } from '../../../../components/controls'
 import { Term } from '../../../../components/Term'
 import { categories } from '../../../../course/categories'
 import { cn } from '../../../../lib/cn'
-import {
-  EBS_PER_GIB_MONTH,
-  MIN_BILLED_SECONDS,
-  PRICE_PER_SERVER_HOUR,
-  billEbs,
-  billInstance,
-} from './pricingModel'
+import { EBS_PER_GIB_MONTH, MIN_BILLED_SECONDS, PRICE_PER_SERVER_HOUR, billEbs } from './pricingModel'
+import { DISK_GIB, initialMeter, meterReducer, meterTotals, type Life } from './meterModel'
 
 /** Simulated seconds per real second: a minute passes in 6 seconds, so the 60-second minimum is easy to catch. */
 const SPEED = 10
-/** Size of the server's root disk (a common default for Linux images). */
-const DISK_GIB = 8
+/** The live clock runs for at most this long after each Start, Stop or Terminate press; Skip ahead covers longer spans. */
+const LIVE_MS = 60_000
 const DAY = 86400
 
-type Life = 'none' | 'running' | 'stopped' | 'terminated'
-
-interface MeterState {
-  life: Life
-  /** Seconds of each finished run (one per start). */
-  runs: number[]
-  /** Seconds of the run in progress. */
-  current: number
-  /** Seconds the disk has existed. */
-  disk: number
-  /** Last change, announced to screen readers. */
-  message: string
-}
-
-type MeterAction = { type: 'start' | 'stop' | 'terminate' | 'reset' } | { type: 'tick'; seconds: number }
-
-const initial: MeterState = { life: 'none', runs: [], current: 0, disk: 0, message: '' }
-
-function reducer(s: MeterState, a: MeterAction): MeterState {
-  switch (a.type) {
-    case 'start':
-      if (s.life !== 'none' && s.life !== 'stopped') return s
-      return { ...s, life: 'running', current: 0, message: 'Running. The server and the disk are both billed.' }
-    case 'stop':
-      if (s.life !== 'running') return s
-      return {
-        ...s,
-        life: 'stopped',
-        runs: [...s.runs, s.current],
-        current: 0,
-        message: `Stopped. That run lasted ${duration(s.current)} and was billed ${duration(Math.max(MIN_BILLED_SECONDS, s.current))}. Only the disk is billed now.`,
-      }
-    case 'terminate':
-      if (s.life !== 'running' && s.life !== 'stopped') return s
-      return {
-        ...s,
-        life: 'terminated',
-        runs: s.life === 'running' ? [...s.runs, s.current] : s.runs,
-        current: 0,
-        message: 'Terminated. The server is gone and its root disk was deleted, so both meters stopped.',
-      }
-    case 'tick':
-      if (s.life === 'running') return { ...s, current: s.current + a.seconds, disk: s.disk + a.seconds }
-      if (s.life === 'stopped') return { ...s, disk: s.disk + a.seconds }
-      return s
-    case 'reset':
-      return initial
-  }
+/** True while the browser tab is hidden, so the clock can rest. */
+function usePageHidden() {
+  const [hidden, setHidden] = useState(false)
+  useEffect(() => {
+    const update = () => setHidden(document.hidden)
+    update()
+    document.addEventListener('visibilitychange', update)
+    return () => document.removeEventListener('visibilitychange', update)
+  }, [])
+  return hidden
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -142,25 +100,39 @@ function Meter({
 }
 
 export function LifecycleMeter() {
-  const [s, dispatch] = useReducer(reducer, initial)
+  const reduce = useReducedMotion()
+  const hidden = usePageHidden()
+  const [s, dispatch] = useReducer(meterReducer, initialMeter)
+  const [message, setMessage] = useState('')
+  /** The press count at which the live clock went to rest; the next press wakes it. */
+  const [restingAt, setRestingAt] = useState(-1)
   const alive = s.life === 'running' || s.life === 'stopped'
-
-  // The clock only runs after the learner presses Start, and stops for good on Terminate or Reset.
-  useEffect(() => {
-    if (!alive) return
-    const id = window.setInterval(() => dispatch({ type: 'tick', seconds: 1 }), 1000 / SPEED)
-    return () => window.clearInterval(id)
-  }, [alive])
-
   const running = s.life === 'running'
-  const billedRuns = s.runs.reduce((t, r) => t + Math.max(MIN_BILLED_SECONDS, r), 0)
-  const serverBilled = billedRuns + (running ? Math.max(MIN_BILLED_SECONDS, s.current) : 0)
-  const serverCost =
-    s.runs.reduce((t, r) => t + billInstance('running', r), 0) + (running ? billInstance('running', s.current) : 0)
-  const diskCost = billEbs(DISK_GIB, s.disk / 3600)
+  const ticking = alive && !reduce && !hidden && restingAt !== s.presses
+
+  // The clock ticks only after a press, for at most a minute, never in a hidden tab and never with reduced motion.
+  const presses = s.presses
+  useEffect(() => {
+    if (!ticking) return
+    const id = window.setInterval(() => dispatch({ type: 'tick', seconds: 1 }), 1000 / SPEED)
+    const rest = window.setTimeout(() => setRestingAt(presses), LIVE_MS)
+    return () => {
+      window.clearInterval(id)
+      window.clearTimeout(rest)
+    }
+  }, [ticking, presses])
+
+  const totals = meterTotals(s)
   const allRuns = running ? [...s.runs, s.current] : s.runs
   const shownRuns = allRuns.slice(-4)
   const firstShown = allRuns.length - shownRuns.length
+  const clockNote = reduce
+    ? 'moves when you skip ahead'
+    : ticking || s.life === 'none'
+      ? `${SPEED}× faster than real time`
+      : alive
+        ? 'paused, Skip ahead moves it'
+        : 'stopped for good'
 
   const serverStatus: Record<Life, ReactNode> = {
     none: 'Press Start to launch it.',
@@ -183,19 +155,45 @@ export function LifecycleMeter() {
     ),
   }
 
-  const act = (type: 'start' | 'stop' | 'terminate', allowed: boolean) => () => allowed && dispatch({ type })
   const canStart = s.life === 'none' || s.life === 'stopped'
+  const start = () => {
+    if (!canStart) return
+    dispatch({ type: 'start' })
+    setMessage('Running. The server and the disk are both billed.')
+  }
+  const stop = () => {
+    if (!running) return
+    dispatch({ type: 'stop' })
+    setMessage(
+      `Stopped. That run lasted ${duration(s.current)} and was billed ${duration(Math.max(MIN_BILLED_SECONDS, s.current))}. Only the disk is billed now.`,
+    )
+  }
+  const terminate = () => {
+    if (!alive) return
+    dispatch({ type: 'terminate' })
+    setMessage('Terminated. The server is gone and its root disk was deleted, so both meters stopped.')
+  }
+  const skip = () => {
+    if (!alive) return
+    dispatch({ type: 'tick', seconds: DAY })
+    setMessage(running ? 'One day later: both meters moved.' : 'One day later: only the disk meter moved.')
+  }
+  const reset = () => {
+    dispatch({ type: 'reset' })
+    setMessage('')
+    setRestingAt(-1)
+  }
 
   return (
     <Bench
       title="Try it: watch the meters"
       intro="Start the server, stop it, start it again, and watch which meter keeps running while it is stopped."
-      onReset={() => dispatch({ type: 'reset' })}
+      onReset={reset}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Pill tone={lifeLabel[s.life].tone}>{lifeLabel[s.life].text}</Pill>
         <span className="text-sm tabular-nums text-ink-3">
-          Clock {clock(s.disk)} · {SPEED}× faster than real time
+          Clock {clock(s.disk)} · {clockNote}
         </span>
         <span className="ml-auto inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-3">
           <Pill>
@@ -209,19 +207,19 @@ export function LifecycleMeter() {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button variant="primary" aria-disabled={!canStart} onClick={act('start', canStart)}>
+        <Button variant="primary" aria-disabled={!canStart} onClick={start}>
           <Play aria-hidden />
           Start
         </Button>
-        <Button aria-disabled={!running} onClick={act('stop', running)}>
+        <Button aria-disabled={!running} onClick={stop}>
           <Square aria-hidden />
           Stop
         </Button>
-        <Button variant="danger" aria-disabled={!alive} onClick={act('terminate', alive)}>
+        <Button variant="danger" aria-disabled={!alive} onClick={terminate}>
           <Trash2 aria-hidden />
           Terminate
         </Button>
-        <Button variant="ghost" aria-disabled={!alive} onClick={() => alive && dispatch({ type: 'tick', seconds: DAY })}>
+        <Button variant="ghost" aria-disabled={!alive} onClick={skip}>
           <FastForward aria-hidden />
           Skip ahead 1 day
         </Button>
@@ -236,8 +234,8 @@ export function LifecycleMeter() {
           }
           icon={Server}
           color={categories.compute.color}
-          billed={serverBilled}
-          cost={serverCost}
+          billed={totals.serverSeconds}
+          cost={totals.serverCost}
           on={running}
           status={serverStatus[s.life]}
           rate={running ? `$${PRICE_PER_SERVER_HOUR['on-demand'].toFixed(2)} per hour` : '$0 per hour'}
@@ -250,8 +248,8 @@ export function LifecycleMeter() {
           }
           icon={HardDrive}
           color={categories.storage.color}
-          billed={s.disk}
-          cost={diskCost}
+          billed={totals.diskSeconds}
+          cost={totals.diskCost}
           on={alive}
           status={diskStatus[s.life]}
           rate={alive ? `$${billEbs(DISK_GIB, 1).toFixed(4)} per hour` : '$0 per hour'}
@@ -280,7 +278,7 @@ export function LifecycleMeter() {
       )}
 
       <p className="sr-only" aria-live="polite">
-        {s.message}
+        {message}
       </p>
     </Bench>
   )
