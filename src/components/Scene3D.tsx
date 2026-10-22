@@ -61,7 +61,9 @@ export function Scene3DView({ webgl, label, fallback, children, height = 'h-[320
   const stageRef = useRef<HTMLDivElement>(null)
   const inView = useInView(stageRef)
   const [broken, setBroken] = useState(false)
+  const [ready, setReady] = useState(false)
   const onLost = useCallback(() => setBroken(true), [])
+  const onReady = useCallback(() => setReady(true), [])
   const showFallback = webgl === false || broken
 
   return (
@@ -78,13 +80,18 @@ export function Scene3DView({ webgl, label, fallback, children, height = 'h-[320
       ) : webgl === true ? (
         <SceneBoundary onError={onLost}>
           {/* The loading text sits outside role="img" so it is announced */}
-          <Suspense fallback={<p role="status" className="p-4 text-sm text-screen-dim">Loading the 3D view…</p>}>
-            <div role="img" aria-label={label} className="absolute inset-0">
-              <Scene3DCanvas active={inView} onLost={onLost}>
+          {!ready && (
+            <p role="status" className="absolute left-0 top-0 p-4 text-sm text-screen-dim">
+              Loading the 3D view...
+            </p>
+          )}
+          <div role="img" aria-label={label} className="absolute inset-0">
+            <Suspense fallback={null}>
+              <Scene3DCanvas active={inView} onLost={onLost} onReady={onReady}>
                 {children}
               </Scene3DCanvas>
-            </div>
-          </Suspense>
+            </Suspense>
+          </div>
         </SceneBoundary>
       ) : null}
     </div>

@@ -56,6 +56,17 @@ describe('Scene3DView', () => {
     expect(html).toContain('role="status"')
   })
 
+  it('labels the canvas container when WebGL is available', () => {
+    const html = renderToStaticMarkup(
+      <Scene3DView webgl label="An instance" fallback={<p>flat view</p>}>
+        <mesh />
+      </Scene3DView>,
+    )
+    expect(html).toContain('role="img"')
+    expect(html).toContain('aria-label="An instance"')
+    expect(html).not.toContain('flat view')
+  })
+
   it('reports no WebGL outside a browser', () => {
     expect(hasWebGL()).toBe(false)
   })
