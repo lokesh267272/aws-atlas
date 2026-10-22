@@ -1,5 +1,5 @@
-import { ServerCrash, UtensilsCrossed, ZapOff } from 'lucide-react'
-import { Segmented, Slider } from '../../../../components/controls'
+import { HeartPulse, ServerCrash, UtensilsCrossed, ZapOff } from 'lucide-react'
+import { Pill, Segmented, Slider } from '../../../../components/controls'
 import { Term } from '../../../../components/Term'
 import type { FleetConfig, FleetEvent } from './scaleModel'
 
@@ -7,7 +7,7 @@ import type { FleetConfig, FleetEvent } from './scaleModel'
 export const darkButton =
   'inline-flex h-9 items-center gap-1.5 rounded-md border border-screen-line bg-screen-2 px-3 text-sm font-bold text-screen-text transition-colors hover:border-screen-dim hover:text-white aria-disabled:cursor-default aria-disabled:opacity-45 aria-disabled:hover:border-screen-line aria-disabled:hover:text-screen-text focus-visible:outline-screen-accent [&_svg]:size-4'
 
-export type Knobs = Pick<FleetConfig, 'azCount' | 'min' | 'max' | 'targetCpu'>
+export type Knobs = Pick<FleetConfig, 'azCount' | 'min' | 'max' | 'targetCpu' | 'ordersOn'>
 
 /** Keeps min at or below max: moving one past the other pushes the other along. */
 export function withLimits(cfg: FleetConfig, next: Partial<Knobs>): FleetConfig {
@@ -25,6 +25,30 @@ const AZ_OPTIONS = [
   { value: '2', label: '2 AZs' },
   { value: '3', label: '3 AZs' },
 ] as const
+
+export const ORDERS_OPTIONS: { value: FleetConfig['ordersOn']; label: string }[] = [
+  { value: 'server-disk', label: "Each server's disk" },
+  { value: 'database', label: 'Shared database' },
+]
+
+/** The group replaces servers that fail the load balancer's health checks: a setting, on here (the default is EC2 checks only). */
+export function HealthChecksOn() {
+  return (
+    <Pill tone="ok" className="w-fit">
+      <HeartPulse aria-hidden />
+      {/* One span: the Pill's flex gap would otherwise open a space before the colon. */}
+      <span>
+        Load balancer <Term k="health-check">health checks</Term>: on
+      </span>
+    </Pill>
+  )
+}
+
+/** Under the AZ choice when it is 1: the choice is where servers run; an Application Load Balancer always needs 2 AZs or more. */
+export function OneAzNote({ azCount }: { azCount: number }) {
+  if (azCount !== 1) return null
+  return <p className="mt-1 text-xs text-ink-3">Servers only: the load balancer always spans at least 2 AZs.</p>
+}
 
 /** The event buttons: each makes something happen to the fleet, now. Dark, to sit right under the stage. */
 export function EventButtons({
@@ -44,7 +68,7 @@ export function EventButtons({
       </button>
       <button type="button" className={darkButton} aria-disabled={!canCrash} onClick={() => canCrash && onEvent('instance-crash')}>
         <ServerCrash aria-hidden />
-        Crash an instance
+        Crash a server
       </button>
       <button type="button" className={darkButton} aria-disabled={!canAzDown} onClick={() => canAzDown && onEvent('az-down')}>
         <ZapOff aria-hidden />
@@ -54,20 +78,31 @@ export function EventButtons({
   )
 }
 
-/** The Auto Scaling group's knobs: how many AZs it spans, min and max servers, and the target-tracking CPU target. */
+/** Where orders go, then the Auto Scaling group's knobs: how many AZs it spans, min and max servers, and the CPU target. */
 export function FleetControls({ cfg, onChange }: { cfg: FleetConfig; onChange: (next: Partial<Knobs>) => void }) {
   return (
     <div className="grid min-w-0 gap-4">
+      <Segmented
+        label="Orders go to"
+        size="sm"
+        value={cfg.ordersOn}
+        options={ORDERS_OPTIONS}
+        onChange={(v) => onChange({ ordersOn: v })}
+      />
       <h4 className="text-sm font-bold text-ink">
         <Term k="auto-scaling-group">Auto Scaling group</Term>
       </h4>
-      <Segmented
-        label="AZs the group spans"
-        size="sm"
-        value={String(cfg.azCount) as (typeof AZ_OPTIONS)[number]['value']}
-        options={AZ_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-        onChange={(v) => onChange({ azCount: Number(v) as FleetConfig['azCount'] })}
-      />
+      <HealthChecksOn />
+      <div className="min-w-0">
+        <Segmented
+          label="AZs the group spans"
+          size="sm"
+          value={String(cfg.azCount) as (typeof AZ_OPTIONS)[number]['value']}
+          options={AZ_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          onChange={(v) => onChange({ azCount: Number(v) as FleetConfig['azCount'] })}
+        />
+        <OneAzNote azCount={cfg.azCount} />
+      </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <Slider
           label="Min servers"

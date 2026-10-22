@@ -34,7 +34,8 @@ function placeLabels(events: readonly FleetEvent[]) {
 
 /**
  * The day at a glance: one column per step. The dashed outline is how many orders customers tried to place;
- * green is what was taken and red what was turned away. Results appear only up to the step the day has reached.
+ * green is what was saved, amber what waited out a database failover (saved the step after, so that column
+ * rises above its outline), and red what was turned away. Results appear only up to the step the day has reached.
  */
 export function DayStrip({
   ticks,
@@ -52,7 +53,7 @@ export function DayStrip({
   playing: boolean
 }) {
   const n = ticks.length
-  const top = Math.max(...ticks.map((t) => t.demand)) * 1.08
+  const top = Math.max(...ticks.map((t) => Math.max(t.demand, t.served + t.held + t.turnedAway))) * 1.08
   const pct = (v: number) => `${(v / top) * 100}%`
   const colPct = (c: number) => `${((c + 0.5) / n) * 100}%`
   const rushes = events.filter((e) => e.kind === 'rush')
@@ -119,8 +120,14 @@ export function DayStrip({
               {shown && (
                 <>
                   <span className="absolute inset-x-0 bottom-0 bg-ok/70" style={{ height: pct(t.served) }} />
+                  {t.held > 0 && (
+                    <span className="absolute inset-x-0 bg-warn/55" style={{ bottom: pct(t.served), height: pct(t.held) }} />
+                  )}
                   {t.turnedAway > 0 && (
-                    <span className="absolute inset-x-0 bg-bad" style={{ bottom: pct(t.served), height: pct(t.turnedAway) }} />
+                    <span
+                      className="absolute inset-x-0 bg-bad"
+                      style={{ bottom: pct(t.served + t.held), height: pct(t.turnedAway) }}
+                    />
                   )}
                 </>
               )}
@@ -141,8 +148,9 @@ export function DayStrip({
         ))}
       </div>
 
-      <div className="flex justify-between text-xs text-ink-3">
+      <div className="flex justify-between gap-2 text-xs text-ink-3">
         <span>Morning</span>
+        <span>time sped up</span>
         <span>Night</span>
       </div>
 
@@ -151,7 +159,7 @@ export function DayStrip({
           <span aria-hidden className="size-3 rounded-[2px] border border-dashed border-line-strong" /> Orders tried
         </li>
         <li className="flex items-center gap-1.5">
-          <span aria-hidden className="size-3 rounded-[2px] bg-ok/70" /> Taken
+          <span aria-hidden className="size-3 rounded-[2px] bg-ok/70" /> Saved
         </li>
         <li className="flex items-center gap-1.5">
           <span aria-hidden className="size-3 rounded-[2px] bg-bad" /> Turned away
@@ -160,7 +168,8 @@ export function DayStrip({
           <span aria-hidden className="size-2 rotate-45 bg-bad" /> Orders lost with servers
         </li>
         <li className="flex items-center gap-1.5">
-          <span aria-hidden className="size-2 rounded-full border-2 border-warn" /> Database failover
+          <span aria-hidden className="size-3 rounded-[2px] bg-warn/55" />
+          <span aria-hidden className="size-2 rounded-full border-2 border-warn" /> Failover: orders retry
         </li>
       </ul>
     </div>

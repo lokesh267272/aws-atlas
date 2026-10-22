@@ -37,7 +37,8 @@ export function payStyle(pay: Pay, booting = false): CSSProperties {
     pay === 'savings-plan'
       ? { background: 'var(--color-compute)', borderColor: 'var(--color-compute)' }
       : pay === 'on-demand'
-        ? { background: HEX.computeTint, borderColor: 'var(--color-compute)' }
+        ? // Lesson 5's On-Demand fill: the compute orange at about a third strength on the panel.
+          { background: 'color-mix(in srgb, var(--color-compute) 32%, var(--color-panel))', borderColor: 'var(--color-compute)' }
         : {
             background:
               'repeating-linear-gradient(45deg, var(--color-warn) 0 1.5px, var(--color-warn-soft) 1.5px 4.5px)',

@@ -64,13 +64,15 @@ export interface Tick {
   demand: number
   /** Servers in each of the Region's three AZs at the end of the tick, booting ones included. */
   perAz: number[]
-  /** Orders taken (during a database failover they wait, then go through). */
+  /** Orders saved this step. During a database failover they are held, and saved the step after. */
   served: number
+  /** Orders the servers took during a database failover: the app retries them and they are saved next step. */
+  held: number
   /** Customers who got no healthy server to answer them. */
   turnedAway: number
   /** Orders saved on servers that disappeared this tick. */
   lostOnServers: number
-  /** The orders database is switching to its standby: orders wait and are not lost. */
+  /** The orders database is switching to its standby: the app retries its orders, and none are lost. */
   dbFailingOver: boolean
   /** Example cost of this tick in dollars. */
   cost: number
@@ -220,6 +222,7 @@ function busiest(counts: number[]): number {
  * 1. Events land: an AZ fails (its servers vanish, the database fails over if its primary was there),
  *    a server crashes, or AWS takes back the Spot servers in one AZ.
  * 2. The load balancer sends orders only to healthy servers that have finished booting. What they cannot take is turned away.
+ *    While the database fails over, the orders taken are held (the app retries them) and saved the step after.
  * 3. Target tracking sets desired capacity from average CPU, clamped to [min, max]. The group launches servers
  *    (spread across its healthy AZs, booting for a step) or removes extra ones.
  * Orders saved on a server's own disk vanish with that server; orders in the database never do.
@@ -234,6 +237,8 @@ export function simulateDay(cfg: FleetConfig, events: readonly FleetEvent[] = DA
   const db: { primary: number | null; standby: number | null } = { primary: DB_HOME.primary, standby: DB_HOME.standby }
   const usesDb = cfg.ordersOn === 'database'
   let failoverLeft = 0
+  /** Orders taken but not saved yet: the app keeps retrying them until the database answers. */
+  let waiting = 0
   let nextId = 1
   let insts: Inst[] = []
 
@@ -321,10 +326,19 @@ export function simulateDay(cfg: FleetConfig, events: readonly FleetEvent[] = DA
     const ready = insts.filter((i) => i.readyAt <= t)
     const dbReachable = !usesDb || db.primary !== null
     const capacity = webIn && fits && dbReachable ? ready.length * perServer : 0
-    const served = Math.min(demand[t], capacity)
-    const turnedAway = demand[t] - served
+    const taken = Math.min(demand[t], capacity)
+    const turnedAway = demand[t] - taken
     const dbFailingOver = usesDb && failoverLeft > 0
     if (failoverLeft > 0) failoverLeft--
+    // While the database fails over (or has no primary), the app holds what it took and retries; the step after, it all goes through.
+    let served = taken
+    if (usesDb && (dbFailingOver || db.primary === null)) {
+      waiting += taken
+      served = 0
+    } else {
+      served = taken + waiting
+      waiting = 0
+    }
 
     if (!usesDb && served > 0) {
       // The load balancer spreads orders evenly; each server saves its share on its own disk.
@@ -335,13 +349,15 @@ export function simulateDay(cfg: FleetConfig, events: readonly FleetEvent[] = DA
         extra--
       }
     }
-    const cpu = ready.length > 0 && perServer > 0 ? Math.round((served / (ready.length * perServer)) * 100) : 0
+    // The servers did the work for every order they took, held or not.
+    const cpu = ready.length > 0 && perServer > 0 ? Math.round((taken / (ready.length * perServer)) * 100) : 0
 
     // 3. Auto Scaling: target tracking on average CPU, then launch or remove.
-    const desired = desiredFor(served)
+    const desired = desiredFor(taken)
     if (insts.length < desired) launch(t, desired - insts.length)
     while (insts.length > desired) {
-      // Keep the Savings Plan minimum: remove Spot first, then the newest On-Demand, from the AZ with the most servers.
+      // Simplified: AWS removes from the AZ with the most servers first; which server goes next is configurable.
+      // Here Spot goes first, then the newest On-Demand, so the Savings Plan minimum stays.
       const pool = insts.some((i) => i.spot) ? insts.filter((i) => i.spot) : insts
       const az = busiest(Array.from({ length: REGION_AZS }, (_, a) => insts.filter((i) => i.az === a).length))
       const inAz = pool.filter((i) => i.az === az)
@@ -365,6 +381,7 @@ export function simulateDay(cfg: FleetConfig, events: readonly FleetEvent[] = DA
       demand: demand[t],
       perAz: Array.from({ length: REGION_AZS }, (_, a) => insts.filter((i) => i.az === a).length),
       served,
+      held: waiting,
       turnedAway,
       lostOnServers,
       dbFailingOver,
@@ -405,6 +422,40 @@ export type LossReason =
   | 'db-down'
   | 'orders-on-disks'
   | 'over-budget'
+
+/* -------------------------------------------------------------- The final challenge */
+
+/** A run of the final challenge: its day, the two checks, and why it failed (empty when it passed). */
+export interface RunVerdict {
+  events: FleetEvent[]
+  day: DayResult
+  noLostOrders: boolean
+  underBudget: boolean
+  passed: boolean
+  why: LossReason[]
+}
+
+/** Runs this build through the challenge day (Spot builds also face a Spot interruption) and judges it. */
+export function judgeRun(cfg: FleetConfig): RunVerdict {
+  const events = eventsFor(cfg)
+  const day = simulateDay(cfg, events)
+  const noLostOrders = day.lostOrders === 0
+  const underBudget = day.cost <= DAY_BUDGET
+  return { events, day, noLostOrders, underBudget, passed: noLostOrders && underBudget, why: whyLost(cfg, day, events) }
+}
+
+/**
+ * What the challenge panel shows for the build on screen.
+ * Checks tick only after a run. "All set" means this build would pass but has not run yet.
+ * A solved challenge goes stale when the build changes, until a passing build runs again (a run in progress is not stale).
+ */
+export function challengeView(v: RunVerdict, s: { ran: boolean; running: boolean; solved: boolean }) {
+  return {
+    checks: { noLostOrders: s.ran && v.noLostOrders, underBudget: s.ran && v.underBudget },
+    ready: v.passed && !s.ran && !s.running,
+    stale: s.solved && !(v.passed && (s.ran || s.running)),
+  }
+}
 
 /** Why a day lost orders or money, most basic cause first. Empty when the day was solved. */
 export function whyLost(cfg: FleetConfig, r: DayResult, events: readonly FleetEvent[] = eventsFor(cfg)): LossReason[] {

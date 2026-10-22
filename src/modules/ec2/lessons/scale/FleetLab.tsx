@@ -6,7 +6,7 @@ import { Bench } from '../../../../components/lesson'
 import { Term } from '../../../../components/Term'
 import { DayStrip } from './DayStrip'
 import { EventButtons, FleetControls, withLimits, type Knobs } from './FleetControls'
-import { RegionView, screenTerms, statusLine } from './RegionView'
+import { recentRemoved, RegionView, screenTerms, statusLine } from './RegionView'
 import { DAY_TICKS, RUSH, simulateDay, solution, type FleetConfig, type FleetEvent } from './scaleModel'
 import { useDayPlayer } from './useDayPlayer'
 
@@ -20,6 +20,12 @@ const SETTLE: Record<FleetEvent['kind'], number> = {
   'az-down': 3,
   'spot-interruption': 2,
 }
+
+/**
+ * With reduced motion the day jumps instead of playing. A crash or Spot step jumps only one step on, so the
+ * failed server and its replacement both still show; a rush or an outage jumps to its settled end.
+ */
+const SETTLE_REDUCED: Record<FleetEvent['kind'], number> = { ...SETTLE, 'instance-crash': 1, 'spot-interruption': 1 }
 
 const money = (n: number) => `$${n.toFixed(2)}`
 
@@ -35,7 +41,7 @@ export function FleetLab() {
   const tick = day.ticks[at]
   const dayOver = at >= DAY_TICKS - 1 && !player.playing
   const sofar = day.ticks.slice(0, at + 1)
-  const turnedAway = sofar.reduce((n, t) => n + t.turnedAway, 0)
+  const lost = sofar.reduce((n, t) => n + t.turnedAway + t.lostOnServers, 0)
   const cost = sofar.reduce((n, t) => n + t.cost, 0)
   const started = events.length > 0
 
@@ -45,7 +51,7 @@ export function FleetLab() {
     const when = fresh ? 0 : at
     const next = [...(fresh ? [] : events), { at: when, kind }]
     setEvents(next)
-    const to = Math.min(DAY_TICKS - 1, when + SETTLE[kind])
+    const to = Math.min(DAY_TICKS - 1, when + (reduced ? SETTLE_REDUCED : SETTLE)[kind])
     if (player.playing) player.extend(to)
     else player.play(when, to)
   }
@@ -59,9 +65,9 @@ export function FleetLab() {
   }
 
   const status = !started
-    ? `A quiet morning: ${tick.inService} servers take every order. Make something happen.`
+    ? `A quiet morning: ${tick.inService} servers take every order`
     : dayOver
-      ? `Day over: ${turnedAway} customers turned away. Press an event to start a new day.`
+      ? `Day over: ${lost} orders lost; any event starts a new day`
       : statusLine(day.ticks, at, cfg)
 
   return (
@@ -71,13 +77,19 @@ export function FleetLab() {
       intro={
         <>
           Trigger an event below and watch <Term k="auto-scaling">Auto Scaling</Term> add or replace servers while the{' '}
-          <Term k="application-load-balancer">load balancer</Term> routes around trouble.
+          <Term k="load-balancer">load balancer</Term> routes around trouble.
         </>
       }
       onReset={reset}
       className={screenTerms}
     >
-      <RegionView tick={tick} cfg={cfg} playing={player.playing} reduced={reduced} />
+      <RegionView
+        tick={tick}
+        cfg={cfg}
+        playing={player.playing}
+        reduced={reduced}
+        removed={started ? recentRemoved(day.ticks, at) : []}
+      />
 
       <div className="mt-3">
         {/* Once the day is over, any event starts a new day, so every button works again. */}
@@ -105,7 +117,7 @@ export function FleetLab() {
             hint={`target ${cfg.targetCpu}%`}
             tone={tick.cpu > 90 ? 'bad' : 'neutral'}
           />
-          <Readout label="Turned away today" value={turnedAway} tone={turnedAway > 0 ? 'bad' : 'neutral'} />
+          <Readout label="Orders lost today" value={lost} tone={lost > 0 ? 'bad' : 'neutral'} />
           <Readout
             label="Cost so far"
             value={money(cost)}

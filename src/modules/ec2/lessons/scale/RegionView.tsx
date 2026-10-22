@@ -4,7 +4,7 @@ import { Term } from '../../../../components/Term'
 import { story } from '../../story'
 import { payStyle } from './look'
 import { RegionFallback } from './RegionFallback'
-import { REGION_AZS, type FleetConfig, type Pay, type Tick } from './scaleModel'
+import { fitsWebsite, REGION_AZS, type FleetConfig, type Pay, type RemovedView, type Tick } from './scaleModel'
 
 // three.js loads only when the browser can show 3D.
 const RegionScene = lazy(() => import('./RegionScene'))
@@ -33,56 +33,63 @@ export function describeRegion(tick: Tick, cfg: FleetConfig, live = true): strin
       ? 'Orders are saved on each server’s own disk; the database is not used.'
       : tick.dbPrimary === null
         ? 'The orders database is unavailable.'
-        : `Orders database primary in ${story.azs[tick.dbPrimary]}${tick.dbFailingOver ? ', failing over, orders waiting' : ''}${
+        : `Orders database primary in ${story.azs[tick.dbPrimary]}${tick.dbFailingOver ? ', failing over, orders retrying' : ''}${
             tick.dbStandby !== null ? `, standby copy in ${story.azs[tick.dbStandby]}` : ''
           }.`
   return [`Region ${story.regionCode} with three Availability Zones.`, ...azs, lb, db].join(' ')
 }
 
-/** The sentence for an event (crash, AZ down, Spot taken back) that happened at this step, if any. */
-function eventSentence(tick: Tick, prev: Tick | undefined): string | null {
+/** Steps an event's line stays up, so it can be read (about two seconds while the day plays). */
+export const EVENT_STEPS = 3
+
+/** Servers that left in the last two steps, so a crashed or taken-back server and its tag stay on stage long enough to see. */
+export function recentRemoved(ticks: Tick[], at: number): RemovedView[] {
+  return [at - 1, at].filter((i) => i >= 0 && i < ticks.length).flatMap((i) => ticks[i].removed)
+}
+
+/** The line for an event (AZ down, crash, Spot taken back) at this step, if any. */
+function eventLine(tick: Tick, prev: Tick | undefined, cfg: FleetConfig): string | null {
   const reasons = new Set(tick.removed.map((r) => r.reason))
-  const launched = tick.instances.some((i) => i.booting)
   if (reasons.has('az-down')) {
     const az = tick.azDown.findIndex((d, a) => d && !prev?.azDown[a])
     const name = story.azs[Math.max(0, az)]
-    const first = launched
-      ? `${name} went down: the load balancer uses the other AZs and Auto Scaling launches replacements there.`
-      : `${name} went down, and the group has no other AZ to launch replacements in.`
-    return tick.dbFailingOver ? `${first} The database fails over to its standby: orders wait, then go through.` : first
+    const left = Array.from({ length: cfg.azCount }, (_, a) => a).some((a) => !tick.azDown[a])
+    if (!left) return `${name} down: the group has no other AZ`
+    return tick.dbFailingOver ? `${name} down: other AZs take over, the database fails over` : `${name} down: other AZs take over`
   }
-  if (reasons.has('crash')) return 'A server crashed: the load balancer stops sending to it, and Auto Scaling launches a replacement.'
-  if (reasons.has('spot')) return 'AWS took back the Spot servers in one AZ: Auto Scaling launches replacements.'
+  if (reasons.has('crash')) return 'A server failed its health check: Auto Scaling replaces it'
+  if (reasons.has('spot')) return 'AWS took back Spot servers: Auto Scaling replaces them'
+  return null
+}
+
+/** The line for what Auto Scaling did at this step, if anything. */
+function actionLine(tick: Tick): string | null {
+  const launched = tick.instances.filter((i) => i.booting).length
+  const removed = tick.removed.filter((r) => r.reason === 'scale-in').length
+  if (launched > 0) return `CPU above target: Auto Scaling starts ${count(launched, 'server', 'servers')}`
+  if (removed > 0) return `CPU below target: Auto Scaling removes ${count(removed, 'server', 'servers')}`
   return null
 }
 
 /**
- * One short line saying what is happening at step `at`. An event's sentence stays for two steps, so it can be read;
- * otherwise it says what Auto Scaling is doing, or how the fleet is coping.
+ * One short clause (at most 15 words) for step `at`. The stage, the strip and the readouts show the rest.
+ * An event's line stays for EVENT_STEPS steps and an Auto Scaling action's for two, unless something newer happens.
  */
 export function statusLine(ticks: Tick[], at: number, cfg: FleetConfig): string {
-  const tick = ticks[at]
-  const parts: string[] = []
-  const recent = [at, at - 1].filter((i) => i >= 0).map((i) => eventSentence(ticks[i], ticks[i - 1]))
-  const event = recent.find((s) => s !== null)
-  const launched = tick.instances.filter((i) => i.booting).length
-  const removedByScaling = tick.removed.filter((r) => r.reason === 'scale-in').length
-  if (event) parts.push(event)
-  else if (launched > 0) parts.push(`CPU is above target, so Auto Scaling is starting ${count(launched, 'more server', 'more servers')}.`)
-  else if (removedByScaling > 0) parts.push(`CPU fell below target, so Auto Scaling removed ${count(removedByScaling, 'server', 'servers')}.`)
-  else if (tick.azDown.some(Boolean)) {
-    const az = story.azs[tick.azDown.findIndex(Boolean)]
-    parts.push(
-      tick.inService > 0
-        ? `${az} is down: ${count(tick.inService, 'server', 'servers')} in the other AZs take the orders.`
-        : `${az} is down, and no servers are left to take orders.`,
-    )
+  for (let k = 0; k < EVENT_STEPS && at - k >= 0; k++) {
+    const line = eventLine(ticks[at - k], ticks[at - k - 1], cfg)
+    if (line) return line
   }
-  if (tick.lostOnServers > 0) parts.push(`${tick.lostOnServers} orders vanished with the servers' disks.`)
-  if (tick.turnedAway > 0) parts.push(`${tick.turnedAway} customers turned away.`)
-  if (parts.length === 0)
-    parts.push(cfg.webOpen ? `${count(tick.inService, 'server', 'servers')} taking orders, average CPU ${tick.cpu}%.` : 'The web port is closed.')
-  return parts.join(' ')
+  const action = actionLine(ticks[at]) ?? (at > 0 ? actionLine(ticks[at - 1]) : null)
+  if (action) return action
+  const tick = ticks[at]
+  if (!cfg.webOpen) return 'Web port closed: every customer is turned away'
+  if (!fitsWebsite(cfg.instanceType)) return 'Too little memory: the website cannot run'
+  if (cfg.ordersOn === 'database' && tick.dbPrimary === null) return 'No database left: orders cannot be saved'
+  if (tick.inService === 0) return 'No servers are taking orders'
+  const down = tick.azDown.findIndex(Boolean)
+  if (down >= 0) return `${story.azs[down]} down: ${count(tick.inService, 'server', 'servers')} in other AZs take orders`
+  return `${count(tick.inService, 'server', 'servers')} taking orders, average CPU ${tick.cpu}%`
 }
 
 /** A legend mark drawn like a server in the flat view. */
@@ -110,6 +117,7 @@ export function RegionView({
   playing,
   reduced,
   live = true,
+  removed = tick.removed,
 }: {
   tick: Tick
   cfg: FleetConfig
@@ -117,6 +125,8 @@ export function RegionView({
   reduced: boolean
   /** False for a preview of a day not run yet. */
   live?: boolean
+  /** Servers to draw leaving (see recentRemoved); this step's by default. */
+  removed?: RemovedView[]
 }) {
   const label = describeRegion(tick, cfg, live)
   const usesDb = cfg.ordersOn === 'database'
@@ -124,10 +134,10 @@ export function RegionView({
     <div className={screenTerms}>
       <Scene3D
         label={label}
-        height="h-[270px] sm:h-[430px]"
-        fallback={<RegionFallback tick={tick} cfg={cfg} label={label} live={live} />}
+        height="h-[320px] sm:h-[430px]"
+        fallback={<RegionFallback tick={tick} cfg={cfg} label={label} live={live} removed={removed} />}
       >
-        <RegionScene tick={tick} cfg={cfg} playing={playing} reduced={reduced} live={live} />
+        <RegionScene tick={tick} cfg={cfg} playing={playing} reduced={reduced} live={live} removed={removed} />
       </Scene3D>
 
       <ul aria-label="Legend" className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-screen-dim">
@@ -139,7 +149,7 @@ export function RegionView({
         </li>
         <li className="flex items-center gap-1.5">
           <span aria-hidden className="inline-block h-2.5 w-4 shrink-0 rounded-[2px] bg-networking" />{' '}
-          <Term k="application-load-balancer">Load balancer</Term>
+          <Term k="load-balancer">Load balancer</Term>
         </li>
         <li className="flex items-center gap-1.5">
           <ServerSwatch pay="savings-plan" /> Minimum servers: <Term k="savings-plan">Savings Plan</Term>
@@ -160,8 +170,7 @@ export function RegionView({
         <li className="flex items-center gap-1.5">
           <Dot color="var(--color-database)" />
           <span>
-            Order saved in the <Term k="rds">orders database</Term>: primary and <Term k="rds-standby">standby copy</Term>,
-            later module
+            Order saved in the <Term k="rds">database</Term>
           </span>
         </li>
         {!usesDb && (

@@ -11,7 +11,7 @@ export default function Lesson() {
       <Prose>
         <p>
           A lunch rush or one failing <Term k="availability-zone">AZ</Term> would swamp {story.appName}&apos;s single{' '}
-          <Term k="instance">server</Term>, so you will spread servers across AZs with a{' '}
+          <Term k="instance">server</Term>, so spread servers across AZs with a{' '}
           <Term k="load-balancer">load balancer</Term> and <Term k="auto-scaling">Auto Scaling</Term>.
         </p>
       </Prose>
@@ -28,8 +28,9 @@ export default function Lesson() {
 
       <Section title="Build it all">
         <BuildItAll />
-        <SetupDiagram step={6} />
       </Section>
+
+      <SetupDiagram step={6} />
     </>
   )
 }

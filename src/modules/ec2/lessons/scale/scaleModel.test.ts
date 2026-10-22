@@ -5,12 +5,15 @@ import {
   DAY_TICKS,
   DB_HOME,
   SPOT_EVENT,
+  challengeView,
   eventsFor,
   fitsWebsite,
+  judgeRun,
   simulateDay,
   solution,
   startConfig,
   whyLost,
+  type FleetConfig,
 } from './scaleModel'
 
 describe('simulateDay (brief)', () => {
@@ -153,5 +156,133 @@ describe('whyLost', () => {
     expect(why({ ...solution, ordersOn: 'server-disk' })).toContain('orders-on-disks')
     expect(why({ ...solution, instanceType: 'c7g.large' })).toContain('too-little-memory')
     expect(why({ ...solution, min: 8, max: 12 })).toContain('over-budget')
+  })
+})
+
+describe('database failover queue', () => {
+  const day = simulateDay(solution, DAY_EVENTS)
+  const at = day.ticks.findIndex((t) => t.dbFailingOver)
+  const taken = (i: number) => day.ticks[i].demand - day.ticks[i].turnedAway
+
+  it("holds the failover step's orders instead of saving them", () => {
+    expect(at).toBeGreaterThan(0)
+    const t = day.ticks[at]
+    expect(t.served).toBe(0)
+    expect(t.held).toBe(taken(at))
+    expect(t.held).toBeGreaterThan(0)
+  })
+
+  it("saves the held orders on the next step, on top of that step's own: a dip, then a catch-up", () => {
+    const next = day.ticks[at + 1]
+    expect(next.dbFailingOver).toBe(false)
+    expect(next.held).toBe(0)
+    expect(next.served).toBe(taken(at + 1) + day.ticks[at].held)
+    expect(next.served).toBeGreaterThan(next.demand)
+  })
+
+  it('loses nothing: every order customers placed is saved by the end of the day', () => {
+    const placed = day.ticks.reduce((n, t) => n + t.demand, 0)
+    const saved = day.ticks.reduce((n, t) => n + t.served, 0)
+    expect(saved).toBe(placed)
+    expect(day.lostOrders).toBe(0)
+  })
+
+  it('servers stay busy while orders retry, so Auto Scaling does not shrink the fleet', () => {
+    const t = day.ticks[at]
+    expect(t.cpu).toBeGreaterThan(0)
+    expect(t.desired).toBeGreaterThanOrEqual(day.ticks[at - 1].perAz.reduce((a, b) => a + b, 0) - 1)
+  })
+
+  it('outside a failover nothing is held, and orders on disks never wait', () => {
+    for (const [i, t] of day.ticks.entries()) if (i !== at) expect(t.held).toBe(0)
+    const disk = simulateDay({ ...solution, ordersOn: 'server-disk' }, DAY_EVENTS)
+    expect(disk.ticks.every((t) => t.held === 0 && !t.dbFailingOver)).toBe(true)
+  })
+})
+
+describe('judgeRun: does a run of this build pass the final challenge', () => {
+  it("Show me's build passes both checks", () => {
+    const v = judgeRun(solution)
+    expect(v.noLostOrders).toBe(true)
+    expect(v.underBudget).toBe(true)
+    expect(v.passed).toBe(true)
+    expect(v.why).toEqual([])
+    expect(v.events).toEqual(eventsFor(solution))
+  })
+
+  it('the starting build fails', () => {
+    const v = judgeRun(startConfig)
+    expect(v.passed).toBe(false)
+    expect(v.noLostOrders).toBe(false)
+  })
+
+  it('passes only when no order is lost and the day is under budget', () => {
+    const builds: FleetConfig[] = [
+      solution,
+      startConfig,
+      { ...solution, azCount: 1 },
+      { ...solution, azCount: 2 },
+      { ...solution, min: 8, max: 12 },
+      { ...solution, instanceType: 'm7g.xlarge' },
+      { ...solution, burst: 'spot' },
+      { ...solution, ordersOn: 'server-disk' },
+      { ...solution, webOpen: false },
+    ]
+    for (const b of builds) {
+      const v = judgeRun(b)
+      expect(v.passed).toBe(v.noLostOrders && v.underBudget)
+      expect(v.passed).toBe(v.day.solved)
+      expect(v.noLostOrders).toBe(v.day.lostOrders === 0)
+      expect(v.underBudget).toBe(v.day.cost <= DAY_BUDGET)
+      expect(v.why.length === 0).toBe(v.passed)
+    }
+  })
+
+  it('a big always-on fleet keeps every order but fails on budget', () => {
+    const v = judgeRun({ ...solution, min: 8, max: 12 })
+    expect(v.noLostOrders).toBe(true)
+    expect(v.underBudget).toBe(false)
+    expect(v.passed).toBe(false)
+  })
+})
+
+describe('challengeView: what the challenge panel shows', () => {
+  const pass = judgeRun(solution)
+  const failing = judgeRun({ ...solution, azCount: 1 })
+  const idle = { ran: false, running: false, solved: false }
+
+  it('ticks nothing before a run, even a build that would pass', () => {
+    expect(challengeView(judgeRun(startConfig), idle).checks).toEqual({ noLostOrders: false, underBudget: false })
+    expect(challengeView(pass, idle).checks).toEqual({ noLostOrders: false, underBudget: false })
+  })
+
+  it('says All set only for a passing build that has not run yet', () => {
+    expect(challengeView(pass, idle).ready).toBe(true)
+    expect(challengeView(failing, idle).ready).toBe(false)
+    expect(challengeView(pass, { ...idle, running: true }).ready).toBe(false)
+    expect(challengeView(pass, { ...idle, ran: true }).ready).toBe(false)
+  })
+
+  it('ticks the checks after a run', () => {
+    expect(challengeView(pass, { ...idle, ran: true }).checks).toEqual({ noLostOrders: true, underBudget: true })
+    expect(challengeView(failing, { ...idle, ran: true }).checks.noLostOrders).toBe(false)
+  })
+
+  it('goes stale once a solved build is changed, until it runs again and passes', () => {
+    const solved = { ran: true, running: false, solved: true }
+    expect(challengeView(pass, solved).stale).toBe(false)
+    // Changed to a failing build (a change clears ran).
+    expect(challengeView(failing, { ...solved, ran: false }).stale).toBe(true)
+    // Changed to another passing build: still needs a run to prove it.
+    expect(challengeView(pass, { ...solved, ran: false }).stale).toBe(true)
+    // Running a passing build again is not stale.
+    expect(challengeView(pass, { ...solved, ran: false, running: true }).stale).toBe(false)
+    // Unsolved is never stale.
+    expect(challengeView(failing, { ...idle, ran: true }).stale).toBe(false)
+  })
+
+  it('is not stale while Show me plays the solution', () => {
+    expect(challengeView(pass, { ran: false, running: true, solved: false }).stale).toBe(false)
+    expect(challengeView(pass, { ran: false, running: true, solved: true }).stale).toBe(false)
   })
 })

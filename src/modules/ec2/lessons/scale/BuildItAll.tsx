@@ -1,6 +1,6 @@
-import { useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useReducedMotion } from 'motion/react'
-import { Play, Tag, TriangleAlert } from 'lucide-react'
+import { Check, Play, Tag, TriangleAlert } from 'lucide-react'
 // The extension is explicit: on a case-insensitive disk "components/Challenge" would resolve to challenge.ts.
 import { Challenge, useChallenge } from '../../../../components/Challenge.tsx'
 import { Button, Pill, Readout, Segmented, Slider, Switch } from '../../../../components/controls'
@@ -10,18 +10,17 @@ import { story } from '../../story'
 import { AMIS } from '../launch/launchModel'
 import { typeByName } from '../sizing/sizingModel'
 import { DayStrip } from './DayStrip'
-import { MAX_RANGE, MIN_RANGE, withLimits } from './FleetControls'
-import { RegionView, screenTerms, statusLine } from './RegionView'
+import { HealthChecksOn, MAX_RANGE, MIN_RANGE, OneAzNote, ORDERS_OPTIONS, withLimits } from './FleetControls'
+import { recentRemoved, RegionView, screenTerms, statusLine } from './RegionView'
 import {
+  challengeView,
   DAY_BUDGET,
   DAY_TICKS,
-  eventsFor,
   fitsWebsite,
+  judgeRun,
   priceOf,
-  simulateDay,
   solution,
   startConfig,
-  whyLost,
   type FleetConfig,
   type LossReason,
 } from './scaleModel'
@@ -65,25 +64,27 @@ function Group({ title, note, children }: { title: ReactNode; note?: ReactNode; 
 export function BuildItAll() {
   const reduced = useReducedMotion() ?? false
   const challenge = useChallenge()
-  const { solve, fail } = challenge
+  const { solve, fail, show } = challenge
   const player = useDayPlayer(reduced)
   const [cfg, setCfg] = useState<FleetConfig>(startConfig)
   const [ran, setRan] = useState(false)
   const stageRef = useRef<HTMLDivElement>(null)
+  const resultRef = useRef<HTMLDivElement>(null)
   const reasonId = useId()
 
-  const events = useMemo(() => eventsFor(cfg), [cfg])
-  const day = useMemo(() => simulateDay(cfg, events), [cfg, events])
+  const verdict = useMemo(() => judgeRun(cfg), [cfg])
+  const { day, events } = verdict
   const running = player.playing
-  const at = running || ran ? Math.min(player.tick, DAY_TICKS - 1) : 0
+  const view = challengeView(verdict, { ran, running, solved: challenge.state.solved })
+  const live = running || ran
+  const at = live ? Math.min(player.tick, DAY_TICKS - 1) : 0
   const tick = day.ticks[at]
   const sofar = day.ticks.slice(0, at + 1)
   const lostSoFar = sofar.reduce((n, t) => n + t.turnedAway + t.lostOnServers, 0)
   const costSoFar = sofar.reduce((n, t) => n + t.cost, 0)
   const type = typeByName(cfg.instanceType)
   const fits = fitsWebsite(cfg.instanceType)
-  const underBudget = day.cost <= DAY_BUDGET
-  const why = ran ? whyLost(cfg, day, events) : []
+  const why = ran ? verdict.why : []
 
   const set = (next: Partial<FleetConfig>) => {
     // Any change stops a running day: the result would no longer match the build.
@@ -92,13 +93,19 @@ export function BuildItAll() {
     setCfg((c) => withLimits({ ...c, ...next }, next))
   }
 
-  const runDay = (build: FleetConfig, onDone: (solved: boolean) => void) => {
-    const result = simulateDay(build, eventsFor(build))
+  // When a day ends, bring its result into view (on a phone it sits just below the stage the run scrolled to).
+  useEffect(() => {
+    if (ran) resultRef.current?.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' })
+  }, [ran, reduced])
+
+  const runDay = (build: FleetConfig, onDone: (passed: boolean) => void) => {
+    const { passed } = judgeRun(build)
     setRan(false)
-    stageRef.current?.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' })
+    // The stage, the status line and the day strip sit together, so the learner sees the day and its result.
+    stageRef.current?.scrollIntoView({ block: 'start', behavior: reduced ? 'auto' : 'smooth' })
     player.play(0, DAY_TICKS - 1, () => {
       setRan(true)
-      onDone(result.solved)
+      onDone(passed)
     })
   }
 
@@ -107,10 +114,10 @@ export function BuildItAll() {
     runDay(cfg, (ok) => (ok ? solve() : fail()))
   }
 
+  // Show me builds the solution and plays its day; "Solved" appears when the day ends, with both checks ticked.
   const showMe = () => {
     setCfg(solution)
-    runDay(solution, () => undefined)
-    challenge.show()
+    runDay(solution, show)
   }
 
   const reset = () => {
@@ -124,16 +131,16 @@ export function BuildItAll() {
     ? statusLine(day.ticks, at, cfg)
     : ran
       ? day.lostOrders === 0
-        ? `Day over: no orders lost, ${money(day.cost)} spent.`
-        : `Day over: ${day.lostOrders} orders lost.`
-      : 'Choose the parts below, then press Run the day.'
+        ? `Day over: no orders lost, ${money(day.cost)} spent`
+        : `Day over: ${day.lostOrders} orders lost`
+      : 'Choose the parts below, then press Run the day'
 
   const ordersLabel = !ran ? 'No lost orders' : day.lostOrders === 0 ? 'No lost orders' : `No lost orders (this day lost ${day.lostOrders})`
 
   return (
     <Bench
       tone="screen"
-      title="Try it: build it all"
+      title="Try it: survive the day"
       intro={
         <>
           Choose every part, press <strong className="text-screen-text">Run the day</strong>, and keep every order through a
@@ -151,33 +158,59 @@ export function BuildItAll() {
           </>
         }
         checks={[
-          { label: ordersLabel, done: ran && day.lostOrders === 0 },
-          { label: `Under budget (${money(DAY_BUDGET)} a day)`, done: underBudget },
+          { label: ordersLabel, done: view.checks.noLostOrders },
+          { label: `Under budget (${money(DAY_BUDGET)} a day)`, done: view.checks.underBudget },
         ]}
         state={challenge.state}
+        stale={view.stale}
         hint={
           <>
-            Open the web port, spread over 3 <Term k="availability-zone">AZs</Term>, save orders in the shared database,
-            and leave max room for the rush.
+            Pick an <Term k="ami">AMI</Term>, open the web port, span 3 <Term k="availability-zone">AZs</Term>, Min servers 3,
+            Max high, and use the shared database.
           </>
         }
         onHint={challenge.hint}
         onShowMe={showMe}
         successNote={
           <>
-            When one <Term k="availability-zone">AZ</Term> failed, the other two still had enough servers, and the
-            database kept every order through its <Term k="failover">failover</Term>.
+            When one <Term k="availability-zone">AZ</Term> failed, the other two still had enough servers, and no order
+            was lost in the database <Term k="failover">failover</Term>.
           </>
         }
       />
 
-      <div ref={stageRef} className="mt-4">
-        <RegionView tick={tick} cfg={cfg} playing={running} reduced={reduced} live={running || ran} />
+      <div ref={stageRef} className="mt-4 scroll-mt-20">
+        <RegionView
+          tick={tick}
+          cfg={cfg}
+          playing={running}
+          reduced={reduced}
+          live={live}
+          removed={live ? recentRemoved(day.ticks, at) : []}
+        />
       </div>
 
       <p aria-live="polite" className="mt-3 min-h-[3em] text-screen-text sm:min-h-[1.5em]">
         {status}
       </p>
+
+      {/* The result sits under the stage, where Run scrolls to, so a phone shows why a day failed. */}
+      <div ref={resultRef} className="mt-3 grid gap-3 rounded-md bg-panel p-3 text-ink sm:p-4">
+        <DayStrip ticks={day.ticks} events={events} at={at} revealed={live ? at : -1} playing={running} />
+
+        {why.length > 0 && (
+          <div aria-live="polite">
+            <p className="text-sm font-bold text-ink-2">What went wrong</p>
+            <ul className="mt-1.5 flex flex-wrap gap-1.5">
+              {why.map((w) => (
+                <li key={w}>
+                  <Pill tone="bad">{WHY[w]}</Pill>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
 
       <div className="mt-3 grid gap-4 rounded-md bg-panel p-3 text-ink sm:p-4">
         <div className="grid gap-3 md:grid-cols-2">
@@ -198,7 +231,7 @@ export function BuildItAll() {
                 onChange={(v) => set({ instanceType: v })}
               />
               <p className="mt-1 text-xs text-ink-3 tabular-nums">
-                {type.vcpu} vCPUs · {type.memoryGiB} GiB · {rate(priceOf(cfg.instanceType, 'on-demand'))} an hour On-Demand
+                {type.vcpu} <Term k="vcpu">vCPUs</Term> · {type.memoryGiB} GiB · {rate(priceOf(cfg.instanceType, 'on-demand'))} an hour On-Demand
               </p>
               {!fits && (
                 <Pill tone="warn" className="mt-1">
@@ -226,30 +259,33 @@ export function BuildItAll() {
               </>
             }
           >
-            <Segmented
-              label="AZs it spans"
-              size="sm"
-              value={String(cfg.azCount)}
-              options={[
-                { value: '1', label: '1 AZ' },
-                { value: '2', label: '2 AZs' },
-                { value: '3', label: '3 AZs' },
-              ]}
-              onChange={(v) => set({ azCount: Number(v) as FleetConfig['azCount'] })}
-            />
+            <HealthChecksOn />
+            <div className="min-w-0">
+              <Segmented
+                label="AZs it spans"
+                size="sm"
+                value={String(cfg.azCount)}
+                options={[
+                  { value: '1', label: '1 AZ' },
+                  { value: '2', label: '2 AZs' },
+                  { value: '3', label: '3 AZs' },
+                ]}
+                onChange={(v) => set({ azCount: Number(v) as FleetConfig['azCount'] })}
+              />
+              <OneAzNote azCount={cfg.azCount} />
+            </div>
             <Slider label="Min servers" value={cfg.min} min={MIN_RANGE.min} max={MIN_RANGE.max} onChange={(v) => set({ min: v })} />
             <Slider label="Max servers" value={cfg.max} min={MAX_RANGE.min} max={MAX_RANGE.max} onChange={(v) => set({ max: v })} />
           </Group>
 
           <Group title="Where orders are saved">
+            {/* The group's title already names this choice: its own label is for screen readers only. */}
             <Segmented
               label="Orders go to"
               size="sm"
+              className="[&>legend]:sr-only"
               value={cfg.ordersOn}
-              options={[
-                { value: 'server-disk', label: "Each server's disk" },
-                { value: 'database', label: 'Shared database' },
-              ]}
+              options={ORDERS_OPTIONS}
               onChange={(v) => set({ ordersOn: v })}
             />
           </Group>
@@ -258,7 +294,7 @@ export function BuildItAll() {
             title="Paying for servers"
             note={
               <>
-                The minimum is always on, on a <Term k="savings-plan">Savings Plan</Term>
+                A <Term k="savings-plan">Savings Plan</Term> covers the always-on minimum
               </>
             }
           >
@@ -277,8 +313,12 @@ export function BuildItAll() {
                 <Tag aria-hidden />
                 Example prices
               </Pill>
-              per server-hour: Savings Plan {rate(priceOf(cfg.instanceType, 'savings-plan'))} · On-Demand{' '}
-              {rate(priceOf(cfg.instanceType, 'on-demand'))} · Spot {rate(priceOf(cfg.instanceType, 'spot'))}
+              {/* Priced for the chosen type (lesson 2's prices), so they differ from lesson 5's example server. */}
+              <span>
+                per <span className="font-mono">{cfg.instanceType}</span> hour: Savings Plan{' '}
+                {rate(priceOf(cfg.instanceType, 'savings-plan'))} · On-Demand {rate(priceOf(cfg.instanceType, 'on-demand'))}{' '}
+                · Spot {rate(priceOf(cfg.instanceType, 'spot'))}
+              </span>
             </p>
           </Group>
         </div>
@@ -295,40 +335,32 @@ export function BuildItAll() {
               <Play aria-hidden />
               Run the day
             </Button>
-            {cfg.ami === null && (
+            {cfg.ami === null ? (
               <p id={reasonId} className="mt-1 text-xs text-ink-3">
-                Choose an AMI first: without one, nothing can be built.
+                Choose an <Term k="ami">AMI</Term> first: without one, nothing can be built.
               </p>
+            ) : (
+              view.ready && (
+                <Pill tone="ok" className="mt-1.5">
+                  <Check aria-hidden />
+                  All set: press Run the day
+                </Pill>
+              )
             )}
           </div>
           <Readout
-            label={running || ran ? 'Day bill' : 'Day bill (estimate)'}
-            value={money(running || ran ? costSoFar : day.cost)}
+            label={live ? 'Day bill' : 'Day bill (estimate)'}
+            value={money(live ? costSoFar : day.cost)}
             hint={`budget ${money(DAY_BUDGET)}`}
-            tone={ran ? (underBudget ? 'ok' : 'bad') : 'neutral'}
+            tone={ran ? (verdict.underBudget ? 'ok' : 'bad') : 'neutral'}
           />
           <Readout
             label="Orders lost"
-            value={running || ran ? lostSoFar : '–'}
-            hint={running || ran ? undefined : 'run the day to see'}
-            tone={running || ran ? (lostSoFar > 0 ? 'bad' : ran ? 'ok' : 'neutral') : 'neutral'}
+            value={live ? lostSoFar : '–'}
+            hint={live ? undefined : 'run the day to see'}
+            tone={live ? (lostSoFar > 0 ? 'bad' : ran ? 'ok' : 'neutral') : 'neutral'}
           />
         </div>
-
-        <DayStrip ticks={day.ticks} events={events} at={at} revealed={running || ran ? at : -1} playing={running} />
-
-        {why.length > 0 && (
-          <div aria-live="polite">
-            <p className="text-sm font-bold text-ink-2">What went wrong</p>
-            <ul className="mt-1.5 flex flex-wrap gap-1.5">
-              {why.map((w) => (
-                <li key={w}>
-                  <Pill tone="bad">{WHY[w]}</Pill>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
     </Bench>
   )

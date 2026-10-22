@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ComponentRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type ComponentRef, type ReactNode, type RefObject } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Edges, Html, Line } from '@react-three/drei'
 import {
@@ -14,7 +14,7 @@ import {
 import { cn } from '../../../../lib/cn'
 import { story } from '../../story'
 import { HEX } from './look'
-import { DB_HOME, REGION_AZS, type FleetConfig, type Pay, type RemovedReason, type Tick } from './scaleModel'
+import { DB_HOME, REGION_AZS, type FleetConfig, type Pay, type RemovedReason, type RemovedView, type Tick } from './scaleModel'
 
 /* Layout in scene units. AZ platforms sit left to right; the load balancer is in front; customers further in front. */
 const AZ_X = [-2.3, 0, 2.3]
@@ -79,6 +79,17 @@ const labelClass: Record<LabelKind, string> = {
   dim: 'rounded-[3px] border border-screen-line bg-screen/85 px-1.5 py-0.5 text-screen-dim',
 }
 
+/**
+ * Where every label's DOM node lives: the canvas's own wrapper, fixed from the first frame.
+ * Without it, drei's Html moves its node once the canvas connects its events (to a different wrapper) and, when the scene
+ * mounts inside React DOM's commit (lazy chunk already cached, say on a second visit), unmounts its React root
+ * synchronously there: "Attempted to synchronously unmount a root while React was already rendering", once per label.
+ */
+function useLabelHost(): RefObject<HTMLElement> {
+  const gl = useThree((s) => s.gl)
+  return useMemo(() => ({ current: gl.domElement.parentElement! }), [gl])
+}
+
 /** A short DOM label pinned to a point. Hidden from screen readers: the status line and the stage's label say the same. */
 function Label({
   position,
@@ -98,8 +109,9 @@ function Label({
     'above-right': '-translate-y-full',
     'above-left': '-translate-x-full -translate-y-full',
   }[place]
+  const host = useLabelHost()
   return (
-    <Html position={position} center={place === 'center'} zIndexRange={[10, 0]} pointerEvents="none">
+    <Html position={position} center={place === 'center'} zIndexRange={[10, 0]} pointerEvents="none" portal={host}>
       <div aria-hidden className={cn('whitespace-nowrap text-xs font-bold leading-tight', labelClass[kind], shift)}>
         {children}
       </div>
@@ -115,7 +127,8 @@ const BODY: Record<Pay, string> = { 'savings-plan': HEX.compute, 'on-demand': HE
 const EDGE: Record<Pay, string> = { 'savings-plan': HEX.text, 'on-demand': HEX.compute, spot: HEX.warn }
 const RED = new Color(HEX.bad)
 
-function goal(state: BlockState) {
+/** Where a block ends up. With reduced motion a crashed or taken-back server stays as a faded mark, so the change still shows. */
+function goal(state: BlockState, reduced = false) {
   const y = BLOCK.h / 2
   switch (state) {
     case 'ready':
@@ -123,9 +136,9 @@ function goal(state: BlockState) {
     case 'booting':
       return { y, s: 1, o: 0.25, red: 0 }
     case 'crash':
-      return { y: y - 0.3, s: 0, o: 1, red: 1 }
+      return reduced ? { y: y - 0.12, s: 1, o: 0.55, red: 1 } : { y: y - 0.3, s: 0, o: 1, red: 1 }
     case 'spot':
-      return { y: y + 0.9, s: 0, o: 0.7, red: 0 }
+      return reduced ? { y: y + 0.3, s: 1, o: 0.3, red: 0 } : { y: y + 0.9, s: 0, o: 0.7, red: 0 }
     case 'az-down':
     case 'scale-in':
       return { y, s: 0, o: 0.6, red: 0 }
@@ -152,7 +165,7 @@ function Block({
   reduced: boolean
   /** Pop in from nothing (a server launched after the scene first drew). */
   appear: boolean
-  /** A short red tag above it, such as "120 orders lost". */
+  /** A short red tag above it, such as "Health check failed" or "120 orders lost". */
   note?: string
 }) {
   const invalidate = useThree((s) => s.invalidate)
@@ -160,7 +173,7 @@ function Block({
   const body = useRef<MeshLambertMaterial>(null)
   const base = useRef(new Color(BODY[pay]))
   // A server seen for the first time while leaving starts from standing, so its exit still shows.
-  const g0 = goal(reduced ? state : state === 'booting' || state === 'ready' ? state : 'ready')
+  const g0 = reduced ? goal(state, true) : goal(state === 'booting' || state === 'ready' ? state : 'ready')
   const cur = useRef({ x, z, ...g0, s: appear && !reduced ? 0 : g0.s })
 
   useEffect(() => {
@@ -170,7 +183,7 @@ function Block({
 
   useFrame((_, dt) => {
     const c = cur.current
-    const g = goal(state)
+    const g = goal(state, reduced)
     const step = Math.min(dt, 1 / 30)
     const shrinkRate = state === 'crash' ? 2.2 : 5
     const next = reduced
@@ -224,6 +237,14 @@ function Block({
   )
 }
 
+/** The tag over a server that left: what happened to it, and any orders that vanished with it. */
+function leaveTag(reason: RemovedReason, lost: number, narrow: boolean): string | undefined {
+  if (lost > 0) return narrow ? `${lost} lost` : reason === 'crash' ? `Unhealthy: ${lost} orders lost` : `${lost} orders lost`
+  if (reason === 'crash') return narrow ? 'Unhealthy' : 'Health check failed'
+  if (reason === 'spot') return narrow ? 'Taken back' : 'Spot taken back'
+  return undefined
+}
+
 /* ------------------------------------------------------------------ Database */
 
 /** The ready-made orders database (Amazon RDS, Multi-AZ): primary in one AZ, standby copy in another. */
@@ -255,7 +276,7 @@ function Database({
             : failing
               ? narrow
                 ? 'Failing over'
-                : 'Failing over: orders wait'
+                : 'Failing over: orders retry'
               : role === 'primary'
                 ? narrow
                   ? 'primary'
@@ -405,7 +426,8 @@ function LoadBalancer({
             <boxGeometry args={[ALB.w, 0.44, 0.03]} />
             <meshBasicMaterial color={HEX.bad} transparent opacity={0.55} toneMapped={false} />
           </mesh>
-          <Label position={[-2.3, GROUND + 0.5, ALB.z + 0.3]} kind="bad">
+          {/* On a small stage it takes the load balancer's own spot, clear of the AZ tags. */}
+          <Label position={[narrow ? 0 : -2.3, GROUND + 0.5, ALB.z + 0.3]} kind="bad">
             Web port closed
           </Label>
         </>
@@ -437,10 +459,24 @@ const C_AWAY = new Color(HEX.bad)
  * Request dots: customers to the load balancer, on to a healthy server, then to the database (or into the server's own disk).
  * Customers with no healthy server to take them bounce off the load balancer in red. They run only while the day plays.
  */
-function Requests({ tick, cfg, playing, reduced }: { tick: Tick; cfg: FleetConfig; playing: boolean; reduced: boolean }) {
+function Requests({
+  tick,
+  cfg,
+  playing,
+  reduced,
+  slots,
+}: {
+  tick: Tick
+  cfg: FleetConfig
+  playing: boolean
+  reduced: boolean
+  /** Each server's slot on its platform, as the blocks are drawn. */
+  slots: Map<number, number>
+}) {
   const invalidate = useThree((s) => s.invalidate)
   const mesh = useRef<InstancedMesh>(null)
   const tickRef = useRef(tick)
+  const slotsRef = useRef(slots)
   const routes = useRef<(Route | null)[]>(Array.from({ length: N }, () => null))
   const lastU = useRef<number[]>(Array.from({ length: N }, () => 1))
   const counter = useRef(0)
@@ -451,7 +487,8 @@ function Requests({ tick, cfg, playing, reduced }: { tick: Tick; cfg: FleetConfi
 
   useEffect(() => {
     tickRef.current = tick
-  }, [tick])
+    slotsRef.current = slots
+  }, [tick, slots])
 
   useLayoutEffect(() => {
     const m = mesh.current
@@ -469,15 +506,15 @@ function Requests({ tick, cfg, playing, reduced }: { tick: Tick; cfg: FleetConfi
     const k = counter.current++
     const a = new Vector3((((i * 7) % 11) - 5) * 0.55, 0.12, CUSTOMER_Z)
     const ready = t.instances.filter((x) => !x.booting)
-    const share = t.demand > 0 ? t.served / t.demand : 0
+    // Taken orders: during a failover they are held, not saved, but a server still took them.
+    const share = t.demand > 0 ? (t.demand - t.turnedAway) / t.demand : 0
     const served = ready.length > 0 && (k * GOLDEN) % 1 < share
     if (!served) {
       const b = new Vector3(a.x * 0.8, 0.12, ALB.z + ALB.d / 2 + 0.05)
       return { a, b, c: null, d: null, kind: 'away' }
     }
     const inst = ready[k % ready.length]
-    const slot = t.instances.filter((x) => x.az === inst.az).sort((p, q) => p.id - q.id).findIndex((x) => x.id === inst.id)
-    const [sx, sz] = slotXZ(Math.max(0, slot))
+    const [sx, sz] = slotXZ(slotsRef.current.get(inst.id) ?? 0)
     const c = new Vector3(AZ_X[inst.az] + sx, BLOCK.h + 0.06, sz)
     const b = new Vector3(MathUtils.lerp(a.x, c.x, 0.5), 0.12, ALB.z)
     if (cfg.ordersOn === 'server-disk') return { a, b, c, d: null, kind: 'disk' }
@@ -515,7 +552,7 @@ function Requests({ tick, cfg, playing, reduced }: { tick: Tick; cfg: FleetConfi
           o.position.lerpVectors(r.c!, r.d!, p)
           col.copy(C_DB)
         } else if (r.kind === 'wait') {
-          // The database is failing over: the order waits on the server, then goes through.
+          // The database is failing over: the app holds the order and retries it.
           o.position.copy(r.c!)
           o.position.y += 0.08 + 0.04 * Math.sin(p * Math.PI * 2)
           col.copy(C_WAIT)
@@ -557,6 +594,7 @@ export default function RegionScene({
   playing,
   reduced,
   live = true,
+  removed = tick.removed,
 }: {
   tick: Tick
   cfg: FleetConfig
@@ -564,6 +602,8 @@ export default function RegionScene({
   reduced: boolean
   /** False for a preview of a day not run yet: no turned-away count. */
   live?: boolean
+  /** Servers to draw leaving: this step's, or the last two steps' so they stay long enough to see. */
+  removed?: RemovedView[]
 }) {
   const narrow = useThree((s) => s.size.width) < 520
   // Servers that exist when the scene first draws appear in place; later ones pop in.
@@ -576,10 +616,16 @@ export default function RegionScene({
   const lastSlot = useRef(new Map<number, number>())
   const slots = new Map<number, number>()
   for (let a = 0; a < REGION_AZS; a++) {
+    // A server that just left keeps its slot while it is still drawn, so its replacement stands beside it, not on it.
+    const taken = new Set(removed.filter((r) => r.az === a).map((r) => lastSlot.current.get(r.id) ?? -1))
+    let next = 0
     tick.instances
       .filter((i) => i.az === a)
       .sort((p, q) => p.id - q.id)
-      .forEach((inst, s) => slots.set(inst.id, s))
+      .forEach((inst) => {
+        while (taken.has(next)) next++
+        slots.set(inst.id, next++)
+      })
   }
   useEffect(() => {
     slots.forEach((s, id) => lastSlot.current.set(id, s))
@@ -619,7 +665,11 @@ export default function RegionScene({
 
       {Array.from({ length: REGION_AZS }, (_, a) => {
         const here = tick.instances.filter((i) => i.az === a)
-        const gone = tick.removed.filter((r) => r.az === a)
+        const gone = removed.filter((r) => r.az === a)
+        // One tag per AZ, so tags never pile up: on a crashed server first, then a taken-back one, then any that lost orders.
+        const lost = gone.reduce((n, r) => n + r.orders, 0)
+        const tagOn =
+          gone.find((r) => r.reason === 'crash') ?? gone.find((r) => r.reason === 'spot') ?? gone.find((r) => r.orders > 0)
         return (
           <AzPlatform key={a} index={a} inGroup={a < cfg.azCount} down={tick.azDown[a]} reduced={reduced} narrow={narrow}>
             {/* One keyed list, so a server that leaves keeps its block and animates out from where it stood. */}
@@ -651,7 +701,7 @@ export default function RegionScene({
                     state={r.reason}
                     reduced={reduced}
                     appear={false}
-                    note={r.orders > 0 ? `${r.orders} orders lost` : undefined}
+                    note={tagOn?.id === r.id ? leaveTag(r.reason, lost, narrow) : undefined}
                   />
                 )
               }),
@@ -673,7 +723,7 @@ export default function RegionScene({
         Customers
       </Label>
 
-      <Requests tick={tick} cfg={cfg} playing={playing} reduced={reduced} />
+      <Requests tick={tick} cfg={cfg} playing={playing} reduced={reduced} slots={slots} />
     </>
   )
 }

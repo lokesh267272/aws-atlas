@@ -5,7 +5,7 @@ import { Pill } from '../../../../components/controls'
 import { cn } from '../../../../lib/cn'
 import { story } from '../../story'
 import { payStyle } from './look'
-import { DB_HOME, REGION_AZS, type FleetConfig, type Tick } from './scaleModel'
+import { DB_HOME, REGION_AZS, type FleetConfig, type RemovedView, type Tick } from './scaleModel'
 
 /** Coloured square with a white icon, as service tiles draw it. */
 function Icon({ color, children }: { color: string; children: ReactNode }) {
@@ -24,14 +24,11 @@ function DbChip({ role, unused, failing }: { role: 'primary' | 'standby' | 'gone
         <Icon color="var(--color-database)">
           <Database aria-hidden />
         </Icon>
-        <span className="text-xs leading-tight">
-          <span className="block font-bold text-ink">
-            {unused ? 'Orders DB: not used' : role === 'primary' ? 'Orders DB primary' : role === 'standby' ? 'Orders DB standby' : 'Orders DB: lost with the AZ'}
-          </span>
-          <span className="block text-ink-3">later module</span>
+        <span className="text-xs font-bold leading-tight text-ink">
+          {unused ? 'Orders DB: not used' : role === 'primary' ? 'Orders DB primary' : role === 'standby' ? 'Orders DB standby' : 'Orders DB: lost with the AZ'}
         </span>
       </span>
-      {failing && <Pill tone="warn">Failing over: orders wait</Pill>}
+      {failing && <Pill tone="warn">Failing over: orders retry</Pill>}
     </div>
   )
 }
@@ -41,7 +38,20 @@ function DbChip({ role, unused, failing }: { role: 'primary' | 'standby' | 'gone
  * customers, the load balancer, a Region with three AZs, servers coloured by how they are paid for,
  * and the orders database's primary and standby.
  */
-export function RegionFallback({ tick, cfg, label, live = true }: { tick: Tick; cfg: FleetConfig; label: string; live?: boolean }) {
+export function RegionFallback({
+  tick,
+  cfg,
+  label,
+  live = true,
+  removed = tick.removed,
+}: {
+  tick: Tick
+  cfg: FleetConfig
+  label: string
+  live?: boolean
+  /** Servers to mark as gone: this step's, or the last two steps' (see recentRemoved). */
+  removed?: RemovedView[]
+}) {
   const usesDb = cfg.ordersOn === 'database'
   const dbRole = (a: number): 'primary' | 'standby' | 'gone' =>
     tick.dbPrimary === a ? 'primary' : tick.dbStandby === a ? 'standby' : 'gone'
@@ -79,8 +89,10 @@ export function RegionFallback({ tick, cfg, label, live = true }: { tick: Tick; 
               const inGroup = a < cfg.azCount
               const down = tick.azDown[a]
               const here = tick.instances.filter((i) => i.az === a).sort((p, q) => p.id - q.id)
-              const gone = tick.removed.filter((r) => r.az === a && r.reason !== 'scale-in')
-              const lost = tick.removed.filter((r) => r.az === a).reduce((n, r) => n + r.orders, 0)
+              const gone = removed.filter((r) => r.az === a && r.reason !== 'scale-in')
+              const lost = removed.filter((r) => r.az === a).reduce((n, r) => n + r.orders, 0)
+              const crashed = gone.some((r) => r.reason === 'crash')
+              const taken = gone.some((r) => r.reason === 'spot')
               return (
                 <Boundary
                   key={a}
@@ -106,6 +118,12 @@ export function RegionFallback({ tick, cfg, label, live = true }: { tick: Tick; 
                   )}
                   {here.length === 0 && gone.length === 0 && (
                     <p className="text-xs text-ink-3">{down ? 'no servers left' : 'no servers'}</p>
+                  )}
+                  {(crashed || taken) && (
+                    <p className="mt-1 flex flex-wrap gap-1">
+                      {crashed && <Pill tone="bad">Health check failed</Pill>}
+                      {taken && <Pill tone="warn">Spot taken back</Pill>}
+                    </p>
                   )}
                   {lost > 0 && <p className="mt-1 text-xs font-bold text-bad">{lost} orders lost with servers</p>}
                   {(a === DB_HOME.primary || a === DB_HOME.standby) && (

@@ -2,15 +2,10 @@ import type { Glossary } from '../../../../course/types'
 
 /**
  * Glossary terms this lesson adds (only ones missing from the shared glossary).
- * Reused, not redefined: load-balancer, auto-scaling, health-check, multi-az, failover, rds, availability-zone,
+ * Reused, not redefined: load-balancer (also for the Application Load Balancer), auto-scaling, health-check, multi-az, failover, rds, availability-zone,
  * savings-plan, on-demand-instance, spot-instance, launch-time terms such as ami and security-group.
  */
 export const terms: Glossary = {
-  'application-load-balancer': {
-    term: 'Application Load Balancer (ALB)',
-    short:
-      'An AWS load balancer for web traffic. It spreads requests across healthy servers in several Availability Zones and stops sending to any server that fails its health checks.',
-  },
   'auto-scaling-group': {
     term: 'Auto Scaling group',
     short:
@@ -24,7 +19,7 @@ export const terms: Glossary = {
   'target-tracking': {
     term: 'Target tracking policy',
     short:
-      'An Auto Scaling rule that keeps a measurement near a target, such as average CPU near 50%. It adds instances when the measurement is above the target and removes them when it is below.',
+      'An Auto Scaling rule that keeps a measurement near a target, such as average CPU near 50%. It adds instances when the measurement is above the target and removes them, more slowly, when it is below.',
   },
   'cpu-utilization': {
     term: 'CPU utilization',
