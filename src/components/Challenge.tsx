@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react'
-import { Check, Circle, Lightbulb, Target } from 'lucide-react'
+import { Check, Circle, Lightbulb, Target, TriangleAlert } from 'lucide-react'
 import { cn } from '../lib/cn'
 import { Button, Pill } from './controls'
 import {
@@ -55,6 +55,13 @@ export function Challenge({
   useEffect(() => {
     if (state.shown) solvedRef.current?.focus()
   }, [state.shown])
+  const hintRef = useRef<HTMLParagraphElement>(null)
+  const wasHinted = useRef(state.hinted)
+  // Same for the Hint button: when it unmounts on use, move focus to the revealed hint.
+  useEffect(() => {
+    if (state.hinted && !wasHinted.current) hintRef.current?.focus()
+    wasHinted.current = state.hinted
+  }, [state.hinted])
   const hintAvailable = canHint(state)
   const showAvailable = canShow(state)
   const hintButton = hintAvailable && !state.hinted
@@ -122,11 +129,18 @@ export function Challenge({
 
       <div aria-live="polite">
         {hintAvailable && state.hinted && (
-          <p className={cn('mt-2 text-sm', screen ? 'text-screen-text' : 'text-ink-2')}>{hint}</p>
+          <p
+            ref={hintRef}
+            tabIndex={-1}
+            className={cn('mt-2 text-sm outline-none', screen ? 'text-screen-text' : 'text-ink-2')}
+          >
+            {hint}
+          </p>
         )}
         {state.solved && stale && (
-          <p className={cn('mt-3 text-sm font-bold', screen ? 'text-screen-text' : 'text-warn')}>
-            You changed it: run it again to check.
+          <p className={cn('mt-3 flex items-start gap-2 text-sm font-bold', screen ? 'text-screen-text' : 'text-warn')}>
+            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+            <span>You changed it: run it again to check.</span>
           </p>
         )}
         {state.solved && !stale && (

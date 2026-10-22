@@ -36,6 +36,13 @@ describe('Challenge stale state', () => {
     expect(html).not.toContain('Solved')
   })
 
+  it('marks the stale line with a warning icon, in both tones', () => {
+    for (const tone of ['light', 'screen'] as const) {
+      const html = render(solved, true, tone)
+      expect(html).toMatch(/<svg[^>]*lucide-triangle-alert[^>]*aria-hidden="true"[^>]*>.*?You changed it/)
+    }
+  })
+
   it('stale while unsolved changes nothing', () => {
     const html = render(initialChallenge, true)
     expect(html).not.toContain('You changed it')
@@ -62,6 +69,11 @@ describe('Challenge hint', () => {
     const live = html.slice(html.indexOf('aria-live'))
     expect(live).toContain('The hint text')
     expect(html).not.toMatch(/<button[^>]*>(<svg[^>]*>.*?<\/svg>)?Hint<\/button>/)
+  })
+
+  it('makes the revealed hint focusable so focus can move there when the Hint button goes', () => {
+    const html = render({ ...failed, hinted: true })
+    expect(html).toMatch(/<p[^>]*tabindex="-1"[^>]*>The hint text/)
   })
 
   it('does not hard-code the accent colour', () => {
