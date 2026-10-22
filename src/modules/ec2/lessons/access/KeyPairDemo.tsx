@@ -32,7 +32,7 @@ export function KeyPairDemo() {
       title="Try it: log in with a key pair"
       intro={
         <>
-          Try each key: only the private half of your <Term k="ssh-key-pair">key pair</Term> matches the public half on the server.
+          Try each key: only the private half of your <Term k="key-pair">key pair</Term> matches the public half on the server.
         </>
       }
       onReset={() => setAttempt(null)}
@@ -71,6 +71,9 @@ export function KeyPairDemo() {
                   <span className="min-w-0 text-xs leading-tight">
                     <span className="block font-mono text-sm font-bold text-ink [overflow-wrap:anywhere]">{KEYS[k].file}</span>
                     <span className="block text-ink-3">{KEYS[k].caption}</span>
+                    <span className="mt-0.5 block">
+                      <Pill>not on AWS</Pill>
+                    </span>
                     <span className="mt-1 block font-bold text-signal">Log in with this key</span>
                   </span>
                 </button>
@@ -110,7 +113,7 @@ export function KeyPairDemo() {
               <span className="block text-ink-3">put on the server at launch</span>
             </span>
           </motion.div>
-          <p className="mt-2 text-xs text-ink-3">The shapes must match to log in.</p>
+          <p className="mt-2 text-xs text-ink-3">The private key must pair with the public key.</p>
         </div>
       </div>
 
@@ -121,7 +124,7 @@ export function KeyPairDemo() {
             {ok ? 'Logged in' : 'Refused'}
           </Pill>
         )}
-        <div className="overflow-x-auto rounded-md bg-screen px-3 py-2.5 font-mono text-xs leading-relaxed text-screen-text sm:text-sm">
+        <div className="whitespace-pre-wrap rounded-md bg-screen px-3 py-2.5 font-mono text-xs leading-relaxed text-screen-text [overflow-wrap:anywhere] sm:text-sm">
           {attempt ? (
             <>
               <p>

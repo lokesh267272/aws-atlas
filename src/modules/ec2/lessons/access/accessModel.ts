@@ -36,7 +36,7 @@ export const SOURCES: Record<Source, { label: string; cidr: string }> = {
 export const PORTS: { port: number; name: string }[] = [
   { port: 443, name: 'HTTPS' },
   { port: 22, name: 'SSH' },
-  { port: 5432, name: 'Database' },
+  { port: 5432, name: 'PostgreSQL' },
 ]
 
 export const portName = (port: number) => PORTS.find((p) => p.port === port)?.name ?? 'Port'
