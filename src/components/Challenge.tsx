@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useReducer, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react'
 import { Check, Circle, Lightbulb, Target } from 'lucide-react'
 import { cn } from '../lib/cn'
 import { Button, Pill } from './controls'
@@ -22,7 +22,7 @@ export function useChallenge() {
 }
 
 const darkButton =
-  'inline-flex h-8 items-center gap-1.5 rounded-md border border-screen-line bg-screen-2 px-2.5 text-sm font-bold text-screen-text transition-colors hover:border-screen-dim hover:text-white focus-visible:outline-[#5fb3e6] [&_svg]:size-4'
+  'inline-flex h-8 items-center gap-1.5 rounded-md border border-screen-line bg-screen-2 px-2.5 text-sm font-bold text-screen-text transition-colors hover:border-screen-dim hover:text-white focus-visible:outline-screen-accent [&_svg]:size-4'
 
 /** The shared challenge panel: a goal, a live checklist, a hint, a Show me escape hatch and a success note. */
 export function Challenge({
@@ -34,6 +34,7 @@ export function Challenge({
   onShowMe,
   successNote,
   tone = 'light',
+  stale = false,
 }: {
   goal: ReactNode
   checks: { label: ReactNode; done: boolean }[]
@@ -45,9 +46,10 @@ export function Challenge({
   onShowMe: () => void
   successNote: ReactNode
   tone?: 'light' | 'screen'
+  /** True when the learner changed their answer after solving it: swaps the success row for a "run it again" line. Optional; omit for the old behaviour. */
+  stale?: boolean
 }) {
   const screen = tone === 'screen'
-  const hintId = useId()
   const solvedRef = useRef<HTMLDivElement>(null)
   // The Show me button unmounts when solved, so move focus to the result.
   useEffect(() => {
@@ -55,6 +57,7 @@ export function Challenge({
   }, [state.shown])
   const hintAvailable = canHint(state)
   const showAvailable = canShow(state)
+  const hintButton = hintAvailable && !state.hinted
 
   return (
     <div
@@ -90,16 +93,16 @@ export function Challenge({
         ))}
       </ul>
 
-      {(hintAvailable || showAvailable) && (
+      {(hintButton || showAvailable) && (
         <div className="mt-3 flex flex-wrap gap-2">
-          {hintAvailable &&
+          {hintButton &&
             (screen ? (
-              <button type="button" className={darkButton} onClick={onHint} aria-controls={hintId}>
+              <button type="button" className={darkButton} onClick={onHint}>
                 <Lightbulb aria-hidden />
                 Hint
               </button>
             ) : (
-              <Button size="sm" onClick={onHint} aria-controls={hintId}>
+              <Button size="sm" onClick={onHint}>
                 <Lightbulb aria-hidden />
                 Hint
               </Button>
@@ -117,12 +120,16 @@ export function Challenge({
         </div>
       )}
 
-      {hintAvailable && state.hinted && (
-        <p id={hintId} className={cn('mt-2 text-sm', screen ? 'text-screen-text' : 'text-ink-2')}>{hint}</p>
-      )}
-
       <div aria-live="polite">
-        {state.solved && (
+        {hintAvailable && state.hinted && (
+          <p className={cn('mt-2 text-sm', screen ? 'text-screen-text' : 'text-ink-2')}>{hint}</p>
+        )}
+        {state.solved && stale && (
+          <p className={cn('mt-3 text-sm font-bold', screen ? 'text-screen-text' : 'text-warn')}>
+            You changed it: run it again to check.
+          </p>
+        )}
+        {state.solved && !stale && (
           <div
             ref={solvedRef}
             tabIndex={-1}

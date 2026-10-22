@@ -1,11 +1,18 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { baseGlossary } from '../../course/glossary'
 import { getLesson, getModule } from '../../course/registry'
 import { foundations } from '../foundations'
 import { checkTextBudget } from '../../test/textBudget'
 import { ec2 } from './index'
 import { SetupDiagram } from './SetupDiagram'
+import { story } from './story'
+import { terms as launchTerms } from './lessons/launch/terms'
+import { terms as sizingTerms } from './lessons/sizing/terms'
+import { terms as storageTerms } from './lessons/storage/terms'
+import { terms as accessTerms } from './lessons/access/terms'
+import { terms as pricingTerms } from './lessons/pricing/terms'
+import { terms as scaleTerms } from './lessons/scale/terms'
 
 describe('ec2 module skeleton', () => {
   it('registers ec2 as module 2 with six 10-minute lessons', () => {
@@ -47,8 +54,45 @@ describe('ec2 module skeleton', () => {
     expect(at(4)).toMatch(/Security group/)
   })
 
-  it('keeps the server role outside the VPC', () => {
+  it('keeps the server role (IAM is global) outside the Region', () => {
     const html = renderToStaticMarkup(<SetupDiagram step={4} />)
-    expect(html.indexOf('Server role')).toBeGreaterThan(html.indexOf('Snapshot'))
+    expect(html).toContain('Server role')
+    expect(html.indexOf('Server role')).toBeLessThan(html.indexOf(story.regionName))
+    expect(html.indexOf('Snapshot')).toBeGreaterThan(html.indexOf(story.regionName))
+  })
+
+  it('does not draw the server role before step 4', () => {
+    expect(renderToStaticMarkup(<SetupDiagram step={3} />)).not.toContain('Server role')
+  })
+
+  it('no two ec2 lessons define the same glossary key', () => {
+    const sets = { launchTerms, sizingTerms, storageTerms, accessTerms, pricingTerms, scaleTerms }
+    const owners = new Map<string, string[]>()
+    for (const [name, t] of Object.entries(sets)) {
+      for (const k of Object.keys(t)) owners.set(k, [...(owners.get(k) ?? []), name])
+    }
+    const dupes = [...owners].filter(([, o]) => o.length > 1).map(([k, o]) => `${k}: ${o.join(', ')}`)
+    expect(dupes).toEqual([])
+  })
+
+  it('every <Term> key used by an ec2 lesson resolves', async () => {
+    expect(import.meta.env.DEV).toBe(true)
+    // Term warns once per key per module instance, so load fresh copies of everything
+    // (React included, to keep one renderer and one React) or earlier tests would swallow the warning.
+    vi.resetModules()
+    const { renderToStaticMarkup: render } = await import('react-dom/server')
+    const { createElement } = await import('react')
+    const registry = await import('../../course/registry')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      for (const id of ['launch', 'sizing', 'storage', 'access', 'pricing', 'scale']) {
+        const { default: Lesson } = await registry.getLesson('ec2', id)!.lesson.load()
+        render(createElement(Lesson))
+      }
+      const missing = warn.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('[Term] No glossary entry'))
+      expect(missing).toEqual([])
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

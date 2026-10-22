@@ -10,42 +10,47 @@ type Step = 1 | 2 | 3 | 4 | 5 | 6
 export function SetupDiagram({ step }: { step: Step }) {
   return (
     <Bench title="Your setup so far" intro="The highlighted part is what this lesson added to the delivery app.">
-      <Boundary kind="region" label={story.regionName}>
-        <div className="flex flex-col gap-3">
-          <Boundary kind="vpc" label={
-              <>
-                {story.appName} network (<Term k="vpc">VPC</Term>)
-              </>
-            }>
-            {step >= 4 && (
-              <div className="mb-3 flex flex-wrap gap-x-3 gap-y-2">
-                <ServiceTile name="Security group" category="security" icon={ShieldCheck} selected={step === 4} />
+      <div className="flex flex-col gap-3">
+        {step >= 4 && (
+          // IAM is global: the role lives outside any Region and is attached to the server.
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            <ServiceTile
+              name="Server role"
+              category="security"
+              icon={KeyRound}
+              caption="global, attached to the server"
+              selected={step === 4}
+            />
+          </div>
+        )}
+        <Boundary kind="region" label={story.regionName}>
+          <div className="flex flex-col gap-3">
+            <Boundary kind="vpc" label={
+                <>
+                  {story.appName} network (<Term k="vpc">VPC</Term>)
+                </>
+              }>
+              {step >= 4 && (
+                <div className="mb-3 flex flex-wrap gap-x-3 gap-y-2">
+                  <ServiceTile name="Security group" category="security" icon={ShieldCheck} selected={step === 4} />
+                </div>
+              )}
+              {step === 6 ? <ScaledOut /> : <SingleAz step={step} />}
+            </Boundary>
+            {step >= 3 && (
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                <ServiceTile
+                  name="Snapshot"
+                  category="storage"
+                  icon={Camera}
+                  caption="backup outside the AZ"
+                  selected={step === 3}
+                />
               </div>
             )}
-            {step === 6 ? <ScaledOut /> : <SingleAz step={step} />}
-          </Boundary>
-          {step >= 3 && (
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              <ServiceTile
-                name="Snapshot"
-                category="storage"
-                icon={Camera}
-                caption="backup outside the AZ"
-                selected={step === 3}
-              />
-              {step >= 4 && (
-                <ServiceTile
-                  name="Server role"
-                  category="security"
-                  icon={KeyRound}
-                  caption="attached to the server"
-                  selected={step === 4}
-                />
-              )}
-            </div>
-          )}
-        </div>
-      </Boundary>
+          </div>
+        </Boundary>
+      </div>
     </Bench>
   )
 }
