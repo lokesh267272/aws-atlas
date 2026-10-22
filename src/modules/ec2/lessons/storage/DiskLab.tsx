@@ -10,6 +10,7 @@ import {
   MemoryStick,
   PenLine,
   Play,
+  Plug,
   Power,
   Rocket,
   RotateCw,
@@ -36,29 +37,29 @@ const actionButtons: { action: DiskAction; label: string; icon: LucideIcon }[] =
 ]
 
 const actionText: Record<DiskAction, string> = {
-  reboot: 'Rebooted: every disk kept its data, even the instance store.',
-  stop: 'Stopped: the instance store was wiped, and both EBS volumes kept their data.',
-  start: 'Started, usually on a new host: its instance store is empty, and the EBS data is all there.',
-  terminate: 'Terminated: the instance store and the root volume went with the server, and the extra volume was kept.',
-  'host-failure': 'The host broke: the instance store was wiped, the EBS volumes were kept, and AWS stopped the server. Press Start.',
+  reboot: 'Rebooted: every disk kept its data.',
+  stop: 'Stopped: instance store wiped, EBS kept.',
+  start: 'Started: instance store empty, EBS data back.',
+  terminate: 'Terminated: root volume deleted, extra volume kept.',
+  'host-failure': 'Host failed and the server stopped: Start moves it to a healthy host.',
 }
 
 function statusText(lab: LabState): string {
   const last = lab.last
-  if (!last) return 'Every disk holds data. Do something to the server and watch the blocks.'
+  if (!last) return 'Every disk holds data: press a button.'
   switch (last.kind) {
     case 'action':
       return actionText[last.action]
     case 'relaunch':
-      return 'New server in the same AZ: a fresh, empty root volume, and the extra volume attached again with its data.'
+      return 'New server: empty root volume. Attach the kept volume yourself.'
+    case 'attach':
+      return 'Extra volume attached, with all its data.'
     case 'write':
       return 'Data written to every disk the server can reach.'
     case 'snapshot':
-      return lab.restored
-        ? 'A fresh copy of the extra volume left the AZ.'
-        : 'A copy of the extra volume left the AZ. Now restore it into another AZ.'
+      return 'Snapshot saved outside the AZ: restore it elsewhere.'
     case 'restore':
-      return `A new volume was made from the snapshot in ${story.azs[1]}, with the same data.`
+      return `New volume made from the snapshot in ${story.azs[1]}.`
   }
 }
 
@@ -70,7 +71,8 @@ function diskBadge(lab: LabState, disk: Disk): Badge | null {
   if (disk === 'instance-store' && lab.server === 'terminated') return { tone: 'bad', text: 'gone with the server' }
   if (disk === 'ebs-extra' && !lab.extraAttached) return { tone: 'ok', text: 'kept, detached' }
   const last = lab.last
-  if (last?.kind === 'relaunch') return disk === 'ebs-extra' ? { tone: 'ok', text: 'attached again' } : { tone: 'neutral', text: 'new, empty' }
+  if (last?.kind === 'relaunch' && disk !== 'ebs-extra') return { tone: 'neutral', text: 'new, empty' }
+  if (last?.kind === 'attach' && disk === 'ebs-extra') return { tone: 'ok', text: 'you attached it' }
   if (last?.kind === 'action') {
     if (last.lost.includes(disk)) return { tone: 'bad', text: 'wiped' }
     if (lab.data[disk]) return { tone: 'ok', text: 'kept' }
@@ -120,6 +122,15 @@ export function DiskLab() {
             <Button size="sm" variant="primary" aria-disabled={!terminated} onClick={() => terminated && send('relaunch')}>
               <Rocket aria-hidden />
               Launch a new server
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              aria-disabled={lab.server !== 'running' || lab.extraAttached}
+              onClick={() => lab.server === 'running' && !lab.extraAttached && send('attach')}
+            >
+              <Plug aria-hidden />
+              Attach the kept volume
             </Button>
           </div>
         </div>
@@ -176,7 +187,8 @@ export function DiskLab() {
                       name={<Term k="instance-store">Instance store</Term>}
                       lines={['inside the host']}
                       icon={MemoryStick}
-                      color={categories.compute.color}
+                      color={categories.storage.color}
+                      dashed
                       hasData={lab.data['instance-store']}
                       gone={terminated}
                       badge={diskBadge(lab, 'instance-store')}
@@ -199,7 +211,7 @@ export function DiskLab() {
                         <Term k="ebs">EBS</Term>, holds the OS and app
                       </>,
                       <>
-                        <Term k="delete-on-termination">Delete on termination</Term>: Yes
+                        <Term k="delete-on-termination">Delete on termination</Term> <Pill tone="warn">Yes</Pill>
                       </>,
                     ]}
                     icon={HardDrive}
@@ -216,7 +228,7 @@ export function DiskLab() {
                         <Term k="ebs">EBS</Term>, attached after launch
                       </>,
                       <>
-                        <Term k="delete-on-termination">Delete on termination</Term>: No
+                        <Term k="delete-on-termination">Delete on termination</Term> <Pill tone="ok">No</Pill>
                       </>,
                     ]}
                     icon={HardDrive}
@@ -251,7 +263,7 @@ export function DiskLab() {
                     }
                     lines={[
                       <>
-                        stored by AWS in <Term k="s3">S3</Term>
+                        stored by AWS in <Term k="s3">S3</Term> (not a bucket you can see)
                       </>,
                       'restore into any AZ in this Region',
                     ]}
@@ -310,6 +322,7 @@ function DiskCard({
   color,
   hasData,
   gone,
+  dashed = false,
   badge,
   reduce,
 }: {
@@ -320,6 +333,8 @@ function DiskCard({
   hasData: boolean
   /** The disk no longer exists: drawn as a dashed outline. */
   gone: boolean
+  /** A dashed outline that marks a disk inside the host rather than a separate EBS volume. */
+  dashed?: boolean
   badge: Badge | null
   reduce: boolean
 }) {
@@ -327,7 +342,7 @@ function DiskCard({
     <div
       className={cn(
         'flex min-w-0 max-w-full items-start gap-2.5 rounded-md border p-2',
-        gone ? 'border-dashed border-line-strong bg-transparent' : 'border-line bg-panel',
+        gone ? 'border-dashed border-line-strong bg-transparent' : dashed ? 'border-dashed border-line-strong bg-panel' : 'border-line bg-panel',
       )}
     >
       <span

@@ -78,12 +78,21 @@ describe('disk lab', () => {
     expect(s.data['ebs-extra']).toBe(true)
   })
 
-  it('a new server gets a fresh root volume and the extra volume re-attached with its data', () => {
+  it('a new server gets a fresh root volume; the kept extra volume stays detached until the owner attaches it', () => {
     const s = labStep(labStep(initialLab, 'terminate'), 'relaunch')
     expect(s.server).toBe('running')
     expect(s.rootDeleted).toBe(false)
-    expect(s.extraAttached).toBe(true)
+    expect(s.extraAttached).toBe(false)
     expect(s.data).toEqual({ 'instance-store': false, 'ebs-root': false, 'ebs-extra': true })
+    const attached = labStep(s, 'attach')
+    expect(attached.extraAttached).toBe(true)
+    expect(attached.data['ebs-extra']).toBe(true)
+    expect(attached.last).toEqual({ kind: 'attach' })
+  })
+
+  it('attach only works on a running server whose extra volume is detached', () => {
+    expect(labStep(initialLab, 'attach')).toBe(initialLab)
+    expect(labStep(labStep(initialLab, 'terminate'), 'attach').extraAttached).toBe(false)
   })
 
   it('relaunch only works after terminate', () => {
@@ -95,6 +104,14 @@ describe('disk lab', () => {
     expect(snap.snapshot).toEqual({ hasData: true })
     expect(labStep(initialLab, 'restore')).toBe(initialLab)
     expect(labStep(snap, 'restore').restored).toBe(true)
+  })
+
+  it('taking a new snapshot clears the volume restored from the older one', () => {
+    const restored = labStep(labStep(initialLab, 'snapshot'), 'restore')
+    expect(restored.restored).toBe(true)
+    const newer = labStep(restored, 'snapshot')
+    expect(newer.restored).toBe(false)
+    expect(labStep(newer, 'restore').restored).toBe(true)
   })
 
   it('write data refills every disk the running server can reach', () => {
