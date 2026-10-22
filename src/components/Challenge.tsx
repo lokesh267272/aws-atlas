@@ -8,7 +8,7 @@ import {
   challengeReducer,
   initialChallenge,
   type ChallengeState,
-} from './challenge'
+} from './challengeState'
 
 /** Hook holding challenge progress. Call fail() on a miss, solve() on success, show() after applying the solution; pass hint() to the panel as onHint. */
 export function useChallenge() {

@@ -1,8 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useReducedMotion } from 'motion/react'
 import { Check, Play, Tag, TriangleAlert } from 'lucide-react'
-// The extension is explicit: on a case-insensitive disk "components/Challenge" would resolve to challenge.ts.
-import { Challenge, useChallenge } from '../../../../components/Challenge.tsx'
+import { Challenge, useChallenge } from '../../../../components/Challenge'
 import { Button, Pill, Readout, Segmented, Slider, Switch } from '../../../../components/controls'
 import { Bench } from '../../../../components/lesson'
 import { Term } from '../../../../components/Term'

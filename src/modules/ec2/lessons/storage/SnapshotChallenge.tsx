@@ -3,8 +3,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { Camera, DoorOpen, HardDrive, Play, RefreshCw, ShoppingBag, Store, Wrench, type LucideIcon } from 'lucide-react'
 import { Bench } from '../../../../components/lesson'
 import { Button, Pill, Readout, Segmented, type SegmentedOption } from '../../../../components/controls'
-// The extension is needed: on case-insensitive disks 'components/Challenge' resolves to challenge.ts.
-import { Challenge, useChallenge } from '../../../../components/Challenge.tsx'
+import { Challenge, useChallenge } from '../../../../components/Challenge'
 import { Term } from '../../../../components/Term'
 import { cn } from '../../../../lib/cn'
 import {

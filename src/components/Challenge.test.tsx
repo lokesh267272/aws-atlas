@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { Challenge } from './Challenge.tsx'
-import { initialChallenge, type ChallengeState } from './challenge'
+import { Challenge } from './Challenge'
+import { initialChallenge, type ChallengeState } from './challengeState'
 
 const noop = () => {}
 const render = (state: ChallengeState, stale?: boolean, tone?: 'light' | 'screen') =>

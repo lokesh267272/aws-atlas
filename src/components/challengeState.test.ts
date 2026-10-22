@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canHint, canShow, challengeReducer, initialChallenge } from './challenge'
+import { canHint, canShow, challengeReducer, initialChallenge } from './challengeState'
 
 describe('challengeReducer', () => {
   it('offers a hint after 2 failed tries and Show me after 3', () => {

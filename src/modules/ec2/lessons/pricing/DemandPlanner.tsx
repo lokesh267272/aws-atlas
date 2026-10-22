@@ -3,7 +3,7 @@ import { useReducedMotion } from 'motion/react'
 import { Play, Tag } from 'lucide-react'
 import { Bench } from '../../../../components/lesson'
 import { Button, Pill, Readout, Segmented, Slider } from '../../../../components/controls'
-import { Challenge, useChallenge } from '../../../../components/Challenge.tsx'
+import { Challenge, useChallenge } from '../../../../components/Challenge'
 import { Term } from '../../../../components/Term'
 import { story } from '../../story'
 import {

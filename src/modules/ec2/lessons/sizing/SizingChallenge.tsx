@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { Check, Globe, Play, Route, X, Zap, type LucideIcon } from 'lucide-react'
 // The .tsx extension matters: on Windows "Challenge" also matches challenge.ts, which Vite tries first.
-import { Challenge, useChallenge } from '../../../../components/Challenge.tsx'
+import { Challenge, useChallenge } from '../../../../components/Challenge'
 import { Bench } from '../../../../components/lesson'
 import { Button, Pill, Segmented } from '../../../../components/controls'
 import { Term } from '../../../../components/Term'
