@@ -29,7 +29,7 @@ export default function Lesson() {
         <Callout kind="real-aws">
           <p>
             You can usually resize later: stop the <Term k="instance">instance</Term>, choose a new{' '}
-            <Term k="instance-type">instance type</Term>, then start it again.
+            <Term k="instance-type">instance type</Term> with the same kind of processor, then start it again.
           </p>
         </Callout>
       </Section>

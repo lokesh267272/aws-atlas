@@ -37,9 +37,16 @@ export type ChallengeFamily = (typeof CHALLENGE_FAMILIES)[number]
 
 const FAMILY_OF: Record<ChallengeFamily, Family> = { m: 'general', c: 'compute', r: 'memory' }
 /** Real figures: memory per vCPU for m7g, c7g and r7g. */
-const GIB_PER_VCPU: Record<ChallengeFamily, number> = { m: 4, c: 2, r: 8 }
+export const GIB_PER_VCPU: Record<ChallengeFamily, number> = { m: 4, c: 2, r: 8 }
 /** Example price of the large size, in cents per hour. Ratios follow real On-Demand prices: c < m < r. */
 const LARGE_CENTS: Record<ChallengeFamily, number> = { m: 8, c: 7, r: 11 }
+
+/** vCPU and memory of a size in a family: large has 2 vCPU and each step up doubles. */
+export function sizeSpec(family: string, size: string): { vcpu: number; memoryGiB: number } {
+  const step = Math.max(0, SIZES.indexOf(size as Size))
+  const vcpu = 2 * 2 ** step
+  return { vcpu, memoryGiB: vcpu * (GIB_PER_VCPU[family as ChallengeFamily] ?? 4) }
+}
 
 /** Graviton instance types in three families and three sizes. vCPU and memory are the real figures; prices are examples. */
 export const CATALOG: InstanceType[] = CHALLENGE_FAMILIES.flatMap((f) =>
@@ -100,6 +107,24 @@ export function result(picks: Record<JobId, string>): { allFit: boolean; cost: n
   }
   const withinBudget = totalCents <= cents(BUDGET_PER_HOUR)
   return { allFit, cost: totalCents / 100, withinBudget, solved: allFit && withinBudget }
+}
+
+/** How many jobs run out of CPU or memory with these picks. */
+export function failedJobs(picks: Record<JobId, string>): number {
+  return JOBS.filter((job) => {
+    const f = fit(job, typeByName(picks[job.id]))
+    return f.cpu === 'over' || f.memory === 'over'
+  }).length
+}
+
+/** True when the size one step below this pick (same family) still has enough CPU and memory for the job. */
+export function smallerFits(job: { needVcpu: number; needMemoryGiB: number }, name: string): boolean {
+  const { family, generation, extras, size } = parseTypeName(name)
+  const i = SIZES.indexOf(size as Size)
+  if (i <= 0) return false
+  const smaller = typeByName(`${family}${generation}${extras}.${SIZES[i - 1]}`)
+  const f = fit(job, smaller)
+  return f.cpu !== 'over' && f.memory !== 'over'
 }
 
 /** One general-purpose type for everything: where the challenge starts. */

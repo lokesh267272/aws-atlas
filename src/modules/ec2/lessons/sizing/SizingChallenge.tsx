@@ -13,9 +13,11 @@ import {
   CHALLENGE_FAMILIES,
   JOBS,
   SIZES,
+  failedJobs,
   fit,
   parseTypeName,
   result,
+  smallerFits,
   solution,
   startingPicks,
   typeByName,
@@ -85,11 +87,13 @@ export function SizingChallenge() {
     challenge.reset()
   }
 
-  const problems = fits
-    .filter((x) => x.f.cpu === 'over' || x.f.memory === 'over')
-    .map((x) => `${JOB_INFO[x.job.id].name} ran out of ${x.f.memory === 'over' ? 'memory' : 'CPU'}.`)
-  if (!res.withinBudget) problems.push(`${money(res.cost - BUDGET_PER_HOUR)} an hour over budget.`)
-  const summary = !ran ? '' : res.solved ? `All three jobs ran for ${money(res.cost)} an hour.` : problems.join(' ')
+  const failed = failedJobs(picks)
+  const problems: string[] = []
+  if (failed > 0) problems.push(`${failed} ${failed === 1 ? 'job' : 'jobs'} failed`)
+  if (!res.withinBudget) problems.push(`${money(res.cost - BUDGET_PER_HOUR)} over budget`)
+  const summary = !ran ? '' : res.solved ? `All three jobs ran for ${money(res.cost)} an hour.` : `${problems.join(', ')}.`
+  // Solved earlier, but the current answer has changed or no longer passes.
+  const stale = challenge.state.solved && (!ran || !res.solved)
 
   return (
     <Bench
@@ -113,6 +117,7 @@ export function SizingChallenge() {
                 price={type.pricePerHour}
                 cpu={f.cpu}
                 memory={f.memory}
+                smaller={!res.withinBudget && smallerFits(job, type.name)}
                 ran={ran}
                 reduce={reduce}
                 onPick={(name) => pick(job.id, name)}
@@ -128,9 +133,10 @@ export function SizingChallenge() {
               <Play aria-hidden />
               Run the jobs
             </Button>
-            <p aria-live="polite" className={cn('mt-2 text-sm', res.solved ? 'text-ok' : 'text-bad')}>
-              {summary}
-            </p>
+            <div aria-live="polite" className="mt-2">
+              <p className={cn('text-sm', res.solved ? 'text-ok' : 'text-bad')}>{summary}</p>
+              {res.solved && !ran && <Pill tone="ok">All set: press Run the jobs</Pill>}
+            </div>
           </div>
           <Challenge
             goal={`Run all three jobs for ${money(BUDGET_PER_HOUR)} an hour or less`}
@@ -140,6 +146,7 @@ export function SizingChallenge() {
               { label: `Total ${money(BUDGET_PER_HOUR)} an hour or less`, done: res.withinBudget },
             ]}
             state={challenge.state}
+            stale={stale}
             hint="Give CPU-heavy work a c, memory-heavy work an r and balanced work an m, then pick the smallest size with no red."
             onHint={challenge.hint}
             onShowMe={showMe}
@@ -164,6 +171,7 @@ function Cell({ className }: { className: string }) {
 function GaugeKey() {
   return (
     <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
+      <Pill>Example prices</Pill>
       <span>
         Each square is 1 <Term k="vcpu">vCPU</Term> or {GIB_PER_CELL} <Term k="gib">GiB</Term>:
       </span>
@@ -177,7 +185,7 @@ function GaugeKey() {
         <Cell className={missingCell} /> missing
       </span>
       <span className="inline-flex items-center gap-1">
-        <Cell className={cellFill.waste} /> mostly idle
+        <Cell className={cellFill.waste} /> in use, lots spare
       </span>
     </p>
   )
@@ -222,6 +230,7 @@ function JobCard({
   price,
   cpu,
   memory,
+  smaller,
   ran,
   reduce,
   onPick,
@@ -235,6 +244,8 @@ function JobCard({
   price: number
   cpu: Fit
   memory: Fit
+  /** A size one step down would also fit this job. */
+  smaller: boolean
   ran: boolean
   reduce: boolean
   onPick: (name: string) => void
@@ -296,7 +307,8 @@ function JobCard({
         <span className="font-mono font-bold text-ink">{typeName}</span>{' '}
         <span className="text-ink-3">
           {vcpu} vCPU, {memoryGiB} GiB, {money(price)} an hour
-        </span>
+        </span>{' '}
+        {smaller && <Pill tone="warn">Smaller fits</Pill>}
       </p>
       <div className="mt-1.5 grid gap-1.5">
         <Gauge label="CPU" unit="vCPU" perCell={1} need={needVcpu} have={vcpu} status={cpu} />
@@ -320,7 +332,7 @@ function Status({ cpu, memory, ran, reduce }: { cpu: Fit; memory: Fit; ran: bool
   }
   const outcome =
     memory === 'over'
-      ? { tone: 'bad' as const, icon: X, text: 'Crashed: out of memory' }
+      ? { tone: 'bad' as const, icon: X, text: cpu === 'over' ? 'Crashed: out of memory and CPU' : 'Crashed: out of memory' }
       : cpu === 'over'
         ? { tone: 'bad' as const, icon: X, text: 'Too slow: out of CPU' }
         : cpu === 'waste' || memory === 'waste'
