@@ -1,17 +1,40 @@
-import { Prose, Section } from '../../../../components/lesson'
+import { Callout, Prose, Section } from '../../../../components/lesson'
 import { Term } from '../../../../components/Term'
 import { SetupDiagram } from '../../SetupDiagram'
+import { story } from '../../story'
+import { FamilyShapes } from './FamilyShapes'
+import { NameDecoder } from './NameDecoder'
+import { SizingChallenge } from './SizingChallenge'
 
-/** Stub: replaced by the real lesson in a later task. */
 export default function Lesson() {
   return (
     <>
       <Prose>
-        <p>Different jobs need different amounts of power, so you will choose an <Term k="instance">instance</Term> type for each.</p>
+        <p>
+          {story.appName} runs three jobs with very different needs, so you will pick the right{' '}
+          <Term k="instance-type">instance type</Term> for each one.
+        </p>
       </Prose>
-      <Section title="Pick the right size">
-        <SetupDiagram step={2} />
+
+      <Section title="Read the name">
+        <NameDecoder />
       </Section>
+
+      <Section title="Families have shapes">
+        <FamilyShapes />
+      </Section>
+
+      <Section title="Size three jobs">
+        <SizingChallenge />
+        <Callout kind="real-aws">
+          <p>
+            You can usually resize later: stop the <Term k="instance">instance</Term>, choose a new{' '}
+            <Term k="instance-type">instance type</Term>, then start it again.
+          </p>
+        </Callout>
+      </Section>
+
+      <SetupDiagram step={2} />
     </>
   )
 }
