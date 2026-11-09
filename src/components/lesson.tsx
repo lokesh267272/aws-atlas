@@ -29,6 +29,18 @@ export function Prose({ children, className }: { children: ReactNode; className?
   return <div className={cn('prose-lesson', className)}>{children}</div>
 }
 
+/**
+ * A short, always-visible explanation placed above a lesson visual.
+ * Plain body text, no heading, quieter than a Callout.
+ */
+export function Explain({ children }: { children: ReactNode }) {
+  return (
+    <div data-explain="" className="my-4 max-w-[68ch] leading-relaxed text-ink-2 [&_strong]:text-ink">
+      {children}
+    </div>
+  )
+}
+
 /* ---------------------------------------------------------------- Callout */
 
 type CalloutKind = 'analogy' | 'tip' | 'warning' | 'remember' | 'real-aws'
