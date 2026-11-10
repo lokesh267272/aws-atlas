@@ -16,6 +16,12 @@ const PLAY_MS = 7000
 
 export const START_RULES: Rule[] = PREFIX_IDS.map(emptyRule)
 
+/**
+ * The month shown `elapsedMs` into a run. Never below 0: the first animation frame's timestamp can be a
+ * little earlier than the `performance.now()` the run started at.
+ */
+export const monthAt = (elapsedMs: number) => Math.max(0, Math.floor((elapsedMs / PLAY_MS) * SIM_MONTHS))
+
 /** Jump points on the timeline (in months). */
 const JUMPS: { label: string; month: number }[] = [
   { label: 'Day 0', month: 0 },
@@ -131,7 +137,7 @@ export function Calendar({ rules, onRules }: { rules: Rule[]; onRules: (rules: R
       setMonth(0)
       setRun({ rules: p, phase: 'playing' })
       const tick = (now: number) => {
-        const m = Math.floor(((now - start) / PLAY_MS) * SIM_MONTHS)
+        const m = monthAt(now - start)
         if (m >= SIM_MONTHS) {
           frame.current = undefined
           finish(p)
@@ -181,7 +187,7 @@ export function Calendar({ rules, onRules }: { rules: Rule[]; onRules: (rules: R
 
   const passes = solved(result)
   const underBudget = result.total <= SEVEN_YEAR_BUDGET
-  const refused = PREFIX_IDS.filter((p) => result.ruleProblems[p].length > 0)
+  const rejected = PREFIX_IDS.filter((p) => result.ruleProblems[p].length > 0)
   const bill = month > 0 ? result.months[month - 1] : null
   const soFar = result.months.slice(0, month).reduce((n, m) => n + m.cost, 0)
   const done = phase === 'done'
@@ -205,8 +211,9 @@ export function Calendar({ rules, onRules }: { rules: Rule[]; onRules: (rules: R
               done: result.earlyDeletes.length === 0,
             },
             {
-              label: refused.length === 0 ? 'S3 accepts every rule' : `S3 accepts every rule (refused: ${prefixList(refused)})`,
-              done: refused.length === 0,
+              label:
+                rejected.length === 0 ? 'S3 would accept every rule' : `S3 would accept every rule (rejected: ${prefixList(rejected)})`,
+              done: rejected.length === 0,
             },
           ]}
           state={challenge.state}
@@ -302,7 +309,7 @@ export function Calendar({ rules, onRules }: { rules: Rule[]; onRules: (rules: R
         {done
           ? `7 years done. Total ${dollars(result.total)}, budget ${dollars(SEVEN_YEAR_BUDGET)}. ${
               result.earlyDeletes.length > 0 ? `Deleted too early: ${prefixList(result.earlyDeletes)}. ` : ''
-            }${refused.length > 0 ? `Refused rules: ${prefixList(refused)}.` : ''}`
+            }${rejected.length > 0 ? `Rules S3 would reject: ${prefixList(rejected)}.` : ''}`
           : ''}
       </p>
     </Bench>

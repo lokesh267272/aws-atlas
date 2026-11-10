@@ -30,10 +30,10 @@ export interface Rule {
   noncurrentExpireAfterDays: number | null
 }
 
-export type RuleProblem = 'ia-too-soon' | 'not-down-the-waterfall' | 'days-not-increasing' | 'next-step-too-soon' | 'expire-before-last-move'
+export type RuleProblem = 'not-down-the-waterfall' | 'unsupported-move' | 'days-not-increasing' | 'next-step-too-soon' | 'expire-before-last-move'
 
 /** The order problems are listed in. */
-const PROBLEM_ORDER: RuleProblem[] = ['not-down-the-waterfall', 'days-not-increasing', 'ia-too-soon', 'next-step-too-soon', 'expire-before-last-move']
+const PROBLEM_ORDER: RuleProblem[] = ['not-down-the-waterfall', 'unsupported-move', 'days-not-increasing', 'next-step-too-soon', 'expire-before-last-move']
 
 /**
  * Mealhop's bucket has versioning on (lesson 4). So an expiration action does not erase a file:
@@ -49,42 +49,44 @@ export const MENU_VERSIONS_GB_PER_MONTH = 20
 export const SEVEN_YEAR_BUDGET = 5000
 
 /* ------------------------------------------------------------ rule checks */
-/* Each S3 lifecycle constraint is one small function, so the fact audit can adjust it in one place. */
+/*
+ * Each S3 lifecycle constraint is one small function, so the fact audit can adjust it in one place.
+ * Source: https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-transition-general-considerations.html
+ * Since 16 July 2026 there is no "30 days old before Standard-IA or One Zone-IA" rule: a move can be on any day.
+ */
 
 const order = (id: ClassId) => CLASSES.findIndex((c) => c.id === id)
 
 /** Moves that are down the list but that S3 lifecycle still does not support. */
 const UNSUPPORTED_MOVES: [ClassId, ClassId][] = [['one-zone-ia', 'glacier-ir']]
 
-/** Lifecycle only moves objects down the waterfall (CLASSES order), never up or sideways. */
+const isDown = (from: ClassId, to: ClassId) => order(to) > order(from)
+const isUnsupported = (from: ClassId, to: ClassId) => UNSUPPORTED_MOVES.some(([f, t]) => f === from && t === to)
+
+/** Lifecycle only moves objects down the waterfall (CLASSES order), never up or sideways, and not One Zone-IA to Glacier IR. */
 export function canMove(from: ClassId, to: ClassId): boolean {
-  if (order(to) <= order(from)) return false
-  return !UNSUPPORTED_MOVES.some(([f, t]) => f === from && t === to)
+  return isDown(from, to) && !isUnsupported(from, to)
 }
 
-const IA_CLASSES: ClassId[] = ['standard-ia', 'one-zone-ia']
-export const isIa = (id: ClassId) => IA_CLASSES.includes(id)
-
-/** Objects must be at least this many days old before a rule moves them into Standard-IA or One Zone-IA. */
-export const IA_MIN_AGE_DAYS = 30
-/** After a rule moves objects into an IA class, the next move must be at least this many days later. */
-export const IA_MIN_STAY_DAYS = 30
-
-/** Why S3 would refuse this rule (empty = S3 accepts it). `startClass` is where the prefix's files are uploaded. */
+/**
+ * Why S3 would reject this rule (empty = S3 accepts it). `startClass` is where the prefix's files are uploaded.
+ *
+ * One rule can't move files on from a class it moved them to before that class's minimum storage duration
+ * (30 days for the IA classes, 90 for Glacier IR and Flexible Retrieval). AWS's example: Glacier IR after 4 days,
+ * then Deep Archive after 20, is rejected; Deep Archive must be at least day 94. The upload class is not checked:
+ * the rule can't know it, so files uploaded to Standard-IA may move at once (and pay its minimum).
+ */
 export function ruleProblems(r: Rule, startClass: ClassId): RuleProblem[] {
   const found = new Set<RuleProblem>()
   let from = startClass
-  let prevDay: number | null = null
-  /** The day the rule moved the files into an IA class, if the last move did. */
-  let enteredIa: number | null = null
+  let prev: Step | null = null
   for (const s of r.transitions) {
-    if (prevDay !== null && s.afterDays <= prevDay) found.add('days-not-increasing')
-    if (!canMove(from, s.to)) found.add('not-down-the-waterfall')
-    if (isIa(s.to) && s.afterDays < IA_MIN_AGE_DAYS) found.add('ia-too-soon')
-    if (enteredIa !== null && s.afterDays - enteredIa < IA_MIN_STAY_DAYS) found.add('next-step-too-soon')
-    enteredIa = isIa(s.to) ? s.afterDays : null
+    if (prev && s.afterDays <= prev.afterDays) found.add('days-not-increasing')
+    else if (prev && s.afterDays - prev.afterDays < classById(prev.to).minDays) found.add('next-step-too-soon')
+    if (!isDown(from, s.to)) found.add('not-down-the-waterfall')
+    else if (isUnsupported(from, s.to)) found.add('unsupported-move')
     from = s.to
-    prevDay = s.afterDays
+    prev = s
   }
   const last = r.transitions[r.transitions.length - 1]
   if (last && r.expireAfterDays !== null && r.expireAfterDays <= last.afterDays) found.add('expire-before-last-move')
@@ -128,7 +130,7 @@ const earlyLeave = (cls: ClassId, entered: number, left: number): EarlyCharge | 
 }
 
 /**
- * What the rule does to one batch of current files, day by day. A refused rule (any problem) does nothing.
+ * What the rule does to one batch of current files, day by day. A rule S3 would reject (any problem) does nothing here.
  * In a versioned bucket, expiry hides the file (delete marker) and the noncurrent rule deletes it later.
  */
 export function ruleEvents(r: Rule | undefined, startClass: ClassId): RuleEvent[] {
@@ -157,7 +159,7 @@ export function ruleEvents(r: Rule | undefined, startClass: ClassId): RuleEvent[
 /** Old menu versions: they become noncurrent on day 0 in the menu's class, and only the noncurrent rule deletes them. */
 function oldVersionEvents(r: Rule | undefined, cls: ClassId): RuleEvent[] {
   const events: RuleEvent[] = [{ kind: 'hide', day: 0, cls }]
-  // A refused rule does nothing, old versions included.
+  // A rejected rule does nothing, old versions included.
   const days = r && ruleProblems(r, cls).length === 0 ? r.noncurrentExpireAfterDays : null
   if (days !== null) events.push({ kind: 'delete', day: days, cls, early: earlyLeave(cls, 0, days) })
   return events
@@ -297,7 +299,7 @@ export interface SimResult {
 }
 
 /**
- * Run the rules for `months` 30-day months. Rules S3 would refuse do nothing.
+ * Run the rules for `months` 30-day months. Rules S3 would reject do nothing.
  * The first rule for a prefix is used; later ones for the same prefix are ignored.
  */
 export function simulate(rules: Rule[], months = SIM_MONTHS, startClasses: Record<PrefixId, ClassId> = RECOMMENDED_CLASSES): SimResult {
@@ -372,7 +374,7 @@ function mergeStock(list: Stock[]): Stock[] {
   return [...map.values()]
 }
 
-/** Under budget, nothing deleted too early, and S3 accepts every rule. */
+/** Under budget, nothing deleted too early, and S3 would accept every rule. */
 export function solved(r: SimResult): boolean {
   return r.total <= SEVEN_YEAR_BUDGET && r.earlyDeletes.length === 0 && PREFIX_IDS.every((p) => r.ruleProblems[p].length === 0)
 }
