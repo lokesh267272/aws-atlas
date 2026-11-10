@@ -66,8 +66,8 @@ export function statusLine(where: Where, stored: boolean, breaks: Break[]): stri
   const serving = servingAz(where, breaks)
   if (breaks.length === 0) {
     return where === 's3-standard'
-      ? `Stored: ${COPIES_PER_AZ} copies in each of the 3 AZs.`
-      : `Saved on one EBS volume: ${COPIES_PER_AZ} copies, all in ${s3Story.azs[EBS_AZ]}.`
+      ? 'Stored: copies on devices in all 3 AZs.'
+      : `Saved on one EBS volume: copies on devices in ${s3Story.azs[EBS_AZ]} only.`
   }
   if (serving !== null) return `Still loads, from ${s3Story.azs[serving]}: ${left} of ${total} copies left.`
   if (where === 'ebs') {

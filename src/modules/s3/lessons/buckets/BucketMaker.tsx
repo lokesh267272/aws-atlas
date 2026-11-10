@@ -545,7 +545,10 @@ export function BucketMaker() {
               e.dataTransfer.dropEffect = 'copy'
               if (!dragOver) setDragOver(true)
             }}
-            onDragLeave={() => setDragOver(false)}
+            onDragLeave={(e) => {
+              // Moving between the zone's own children is not leaving it.
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false)
+            }}
             onDrop={onDrop}
             className={cn(
               'min-w-0 rounded-md border-2 p-3 transition-colors',
