@@ -3,7 +3,7 @@
  *
  * Facts it follows (S3 docs, "Retaining multiple versions of objects"):
  *  - A bucket starts unversioned ('off'). Once versioning is enabled it can be suspended,
- *    never returned to unversioned.
+ *    never returned to unversioned. (The lesson UI only offers Suspended after On: a sim choice, not an AWS rule.)
  *  - Objects stored while unversioned have the version ID null, and keep it when versioning is turned on.
  *  - On: a PUT adds a new version with its own ID; a simple DELETE adds a delete marker (also with its own ID).
  *  - Suspended: existing versions stay; a PUT replaces the null version (the new null version goes on top);
@@ -67,14 +67,14 @@ function withVersions(b: VBucket, key: string, versions: Version[]): VBucket {
   return { ...b, objects }
 }
 
-/** Whether a bucket in mode `from` can switch to `to`: Off only while never versioned; Suspended only after On. */
+/** Whether a bucket in mode `from` can switch to `to`: Off only while never versioned; Suspended only after On (a lesson simplification). */
 export function canSetMode(from: Mode, to: Mode): boolean {
   if (to === 'off') return from === 'off'
   if (to === 'suspended') return from !== 'off'
   return true
 }
 
-/** Turn versioning on or suspend it. Off is ignored once the bucket has been on; suspend needs it to have been on. */
+/** Turn versioning on or suspend it. Off is ignored once the bucket has been on; this lesson only lets you suspend after On (a simplification, not an AWS rule). */
 export function setMode(b: VBucket, m: Mode): VBucket {
   if (m === b.mode || !canSetMode(b.mode, m)) return b
   return { ...b, mode: m }

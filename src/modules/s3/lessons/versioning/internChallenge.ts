@@ -108,7 +108,7 @@ export function runMessage(b: VBucket): string {
   if (lostFiles(b).length === 0) return 'Versioning kept the old copies: restore each broken file below, then check the menu.'
   if (b.mode === 'off') return 'Versioning was off, so those photos are gone for good: press Reset to try again.'
   if (b.mode === 'suspended')
-    return 'With versioning suspended, the script replaced the null versions, so those photos are gone for good.'
+    return 'With versioning suspended, the script wrote over the old photos (their version ID was null), so they are gone for good.'
   return 'Some photos are gone for good: press Reset to try again.'
 }
 
@@ -122,7 +122,7 @@ export function scriptStatus(s: ScriptState): string {
     case 'mode':
       return last.mode === 'on'
         ? 'Versioning on: the next overwrite or delete keeps the old copy.'
-        : 'Suspended: new writes will replace each photo’s null version.'
+        : 'Suspended: new writes will overwrite each photo’s null-ID copy.'
     case 'run':
       return runMessage(bucket)
     case 'restore':

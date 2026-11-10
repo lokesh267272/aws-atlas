@@ -15,7 +15,7 @@ export const terms: Glossary = {
   'object-lock': {
     term: 'S3 Object Lock',
     short:
-      'A setting that stops anyone from deleting a version of a file for a set time, or until a hold is lifted. It works only in buckets with versioning on.',
+      'A setting that locks a version of a file so it cannot be deleted or overwritten for a set time, or until a hold is lifted. It works only in buckets with versioning on.',
   },
   'mfa-delete': {
     term: 'MFA delete',

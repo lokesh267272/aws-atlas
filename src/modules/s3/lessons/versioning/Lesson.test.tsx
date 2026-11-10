@@ -21,7 +21,7 @@ const radio = (html: string, value: string) => new RegExp(`<input[^>]*value="${v
 describe('versioning lesson', () => {
   it('renders the challenge goal and the Run the script button in SSR', () => {
     const html = renderToStaticMarkup(<Lesson />)
-    expect(html).toMatch(/Run the script, then make the menu look exactly as it did before/)
+    expect(html).toMatch(/Run the script, then restore all three photos so the menu matches how it looked before/)
     expect(html).toMatch(/Run the script<\/button>/)
   })
 
@@ -43,6 +43,12 @@ describe('versioning lesson', () => {
     expect(html).toMatch(/class="term"[^>]*>MFA delete</)
     const withoutTerms = html.replace(/<span[^>]*class="term"[^>]*>[^<]*<\/span>/g, '')
     expect(withoutTerms).not.toMatch(/Object Lock|MFA delete/)
+  })
+
+  it('does not overclaim Object Lock or call delete markers free', () => {
+    expect(terms['object-lock'].short).not.toMatch(/anyone/)
+    expect(textOf(renderToStaticMarkup(<Lesson />))).not.toMatch(/stop anyone|markers? (are|is) free/i)
+    expect(textOf(renderToStaticMarkup(<Lesson />))).toMatch(/markers take almost no space/)
   })
 
   it('never says versioning can be turned off again', () => {
@@ -77,7 +83,7 @@ describe('versioning lesson', () => {
     expect(msg({ kind: 'delete', mode: 'off', hadFile: true })).toMatch(/deleted for good/)
     expect(msg({ kind: 'delete', mode: 'on', hadFile: true })).toMatch(/delete marker.*Older versions are kept/)
     expect(msg({ kind: 'restore', mode: 'on', hadFile: false })).toMatch(/new version/)
-    expect(msg({ kind: 'restore', mode: 'suspended', hadFile: false })).toMatch(/null version/)
+    expect(msg({ kind: 'restore', mode: 'suspended', hadFile: false })).toMatch(/version ID null/)
     expect(msg({ kind: 'delete-version', mode: 'on', hadFile: true, versionId: 'null' })).toMatch(/Version null is deleted for good/)
     expect(msg({ kind: 'mode', mode: 'on' })).toMatch(/version ID null/)
   })
