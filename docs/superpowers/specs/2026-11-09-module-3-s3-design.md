@@ -148,10 +148,10 @@ Lesson ids are the builder's call. Each lesson has 1–2 visuals, each with its 
   - A rule applies to objects matching a filter (a **prefix** such as `receipts/`, or tags).
   - **Transition actions** move objects to a cheaper class after a number of days. **Expiration actions** delete them.
   - A rule can also delete **noncurrent versions** after a number of days (ties back to lesson 4).
-  - Objects must sit in their current class for at least 30 days before a lifecycle rule can move them to Standard-IA or One Zone-IA.
-  - **Minimum storage duration charges** still apply: moving or deleting an object early is billed as if it stayed the minimum time.
+  - *(Updated 2026-11-10.)* AWS removed the "30 days before moving to Standard-IA / One Zone-IA" rule on 16 July 2026. The current rule: a single lifecycle rule can't move an object out of a class before that class's minimum storage duration (e.g. Glacier IR at day 4 → Deep Archive at least day 94).
+  - **Minimum storage duration charges** still apply (unchanged): moving or deleting an object early is billed as if it stayed the minimum time.
 - **Visual: the calendar.** A timeline (day 0 → 30 → 90 → 1 year → 7 years). The learner builds rules (prefix + steps) and drags time forward; files slide down the shelves or disappear, and the monthly bill drops.
-- **Challenge: "Tidy for 7 years."** Write rules for `receipts/` (cheaper over time, deleted after 7 years), `delivery/` (deleted after 30 days), `backups/` (deleted after 30 days) and old menu-photo versions. Run 7 years. Goals: total cost under budget, no file deleted before it's allowed, no rule that breaks the minimum-duration or 30-day transition rules without the learner seeing the cost.
+- **Challenge: "Tidy for 7 years."** Write rules for `receipts/` (cheaper over time, deleted after 7 years), `delivery/` (deleted after 30 days), `backups/` (deleted after 30 days) and old menu-photo versions. Run 7 years. Goals: total cost under budget, no file deleted before it's allowed, no rule that moves a file out of a class before its minimum storage duration, or breaks the minimum-duration charges, without the learner seeing the cost.
 
 ### 6. Final challenge: "Build Mealhop's file store"
 
