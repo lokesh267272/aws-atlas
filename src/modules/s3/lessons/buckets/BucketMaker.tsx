@@ -253,6 +253,8 @@ export function BucketMaker() {
   const [last, setLast] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [dragOver, setDragOver] = useState(false)
+  /** Create was pressed with a problem: show the problems even for an empty name. */
+  const [tried, setTried] = useState(false)
   /** The bucket as it was the last time the app was opened (null: not opened yet). */
   const [opened, setOpened] = useState<BucketState | null>(null)
   const challenge = useChallenge()
@@ -266,6 +268,7 @@ export function BucketMaker() {
 
   const problems = bucketNameProblems(name)
   const typed = name.trim().length > 0
+  const showProblems = typed || tried
   const missing = missingKeys(state)
   const lastObject = state.objects.find((o) => o.key === last) ?? null
 
@@ -279,7 +282,10 @@ export function BucketMaker() {
 
   const create = (e?: FormEvent) => {
     e?.preventDefault()
-    if (problems.length > 0) return
+    if (problems.length > 0) {
+      setTried(true)
+      return
+    }
     justCreated.current = true
     setState((s) => createBucket(s, name))
     setMessage('')
@@ -325,6 +331,7 @@ export function BucketMaker() {
   const reset = () => {
     setState(emptyState)
     setName('')
+    setTried(false)
     setSelected(null)
     setPrefix('')
     setRealKeys(false)
@@ -410,7 +417,7 @@ export function BucketMaker() {
                     autoComplete="off"
                     autoCapitalize="none"
                     spellCheck={false}
-                    aria-invalid={typed && problems.length > 0}
+                    aria-invalid={showProblems && problems.length > 0}
                     aria-describedby={problemsId}
                     className="h-10 min-w-0 flex-1 basis-40 rounded-md border border-line-strong bg-panel px-3 font-mono text-sm text-ink placeholder:text-ink-3 focus-visible:outline-2 focus-visible:outline-signal"
                   />
@@ -420,7 +427,7 @@ export function BucketMaker() {
                   </Button>
                 </div>
                 <div id={problemsId} aria-live="polite">
-                  {!typed ? (
+                  {!showProblems ? (
                     <p className="text-sm text-ink-3">3 to 63 characters: lowercase letters, numbers, dots and hyphens.</p>
                   ) : problems.length > 0 ? (
                     <ul className="flex flex-wrap gap-1.5">

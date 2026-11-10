@@ -108,17 +108,21 @@ export const solution: BucketState = {
 
 export type Where = 's3-standard' | 'ebs'
 export type AzIndex = 0 | 1 | 2
-export type Break = { kind: 'device' | 'datacenter' | 'az'; az: AzIndex }
+/**
+ * Two kinds of break, each matching a documented fact:
+ * - device: one disk or server fails. S3 Standard keeps copies on multiple devices, and an EBS volume's data is
+ *   replicated across multiple servers in its AZ, so neither loses the photo.
+ * - az: a whole AZ (all of its data centers) is out. S3 Standard still has copies in the other AZs; an EBS volume
+ *   lives in one AZ, so it can't be read.
+ */
+export type Break = { kind: 'device' | 'az'; az: AzIndex }
 
 export const AZ_INDEXES: AzIndex[] = [0, 1, 2]
 
-/**
- * Copies kept on separate devices inside each AZ that holds the data. S3 Standard stores objects on multiple devices
- * across at least 3 AZs; an EBS volume is replicated across several servers in its one AZ. The sim draws two of them.
- */
+/** Copies drawn on separate devices inside each AZ that holds the data (AWS only says "multiple"). */
 export const COPIES_PER_AZ = 2
-/** Devices drawn in each data center, and which of them hold a copy. */
-export const DEVICES_PER_DC = 4
+/** Devices drawn in each AZ, and which of them hold a copy. */
+export const DEVICES_PER_AZ = 4
 export const DATA_DEVICES = [0, 2] as const
 /** The AZ the EBS volume (Module 2) lives in. */
 export const EBS_AZ: AzIndex = 0
@@ -128,20 +132,25 @@ export function homeAzs(where: Where): AzIndex[] {
   return where === 's3-standard' ? AZ_INDEXES : [EBS_AZ]
 }
 
-/** In this sim each AZ is drawn as one data center, so a data center going out takes that AZ's copies with it. */
+/** The whole AZ is out. */
 export function azOut(az: AzIndex, breaks: Break[]): boolean {
-  return breaks.some((b) => b.az === az && (b.kind === 'az' || b.kind === 'datacenter'))
+  return breaks.some((b) => b.az === az && b.kind === 'az')
 }
 
-/** Broken devices in an AZ (each break takes the next device that holds a copy). */
-export function devicesBroken(az: AzIndex, breaks: Break[]): number {
-  return Math.min(COPIES_PER_AZ, breaks.filter((b) => b.az === az && b.kind === 'device').length)
+/**
+ * A device in this AZ is broken. The sim breaks at most one per AZ (more breaks there change nothing), because
+ * what AWS documents is that a single failing device or server loses no data.
+ */
+export function deviceBroken(az: AzIndex, breaks: Break[]): boolean {
+  return breaks.some((b) => b.az === az && b.kind === 'device')
 }
 
 /** Copies left in each AZ, as [AZ 0, AZ 1, AZ 2]. */
 export function copiesLeft(where: Where, breaks: Break[]): number[] {
   const homes = homeAzs(where)
-  return AZ_INDEXES.map((az) => (!homes.includes(az) || azOut(az, breaks) ? 0 : COPIES_PER_AZ - devicesBroken(az, breaks)))
+  return AZ_INDEXES.map((az) =>
+    !homes.includes(az) || azOut(az, breaks) ? 0 : COPIES_PER_AZ - (deviceBroken(az, breaks) ? 1 : 0),
+  )
 }
 
 /** The photo can be read while any copy is left. */

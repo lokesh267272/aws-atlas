@@ -1,6 +1,6 @@
 import { lazy, useId, useState } from 'react'
 import { useReducedMotion } from 'motion/react'
-import { Building, HardDrive, Upload, Wrench, ZapOff } from 'lucide-react'
+import { HardDrive, Upload, Wrench, ZapOff } from 'lucide-react'
 import { Switch } from '../../../../components/controls'
 import { Bench } from '../../../../components/lesson'
 import { Scene3D } from '../../../../components/Scene3D'
@@ -14,7 +14,7 @@ import {
   EBS_AZ,
   azOut,
   copiesLeft,
-  devicesBroken,
+  deviceBroken,
   homeAzs,
   servingAz,
   type AzIndex,
@@ -38,16 +38,15 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
 /** What one AZ looks like now, for screen readers. */
 function describeAz(where: Where, az: AzIndex, stored: boolean, breaks: Break[]): string {
   const name = s3Story.azs[az]
-  if (breaks.some((b) => b.az === az && b.kind === 'az')) return `${name} is out.`
-  if (breaks.some((b) => b.az === az && b.kind === 'datacenter')) return `${name}: its data center is out.`
-  const broken = devicesBroken(az, breaks) > 0 ? `${count(devicesBroken(az, breaks), 'device', 'devices')} broken, ` : ''
+  if (azOut(az, breaks)) return `${name} is out.`
+  const broken = deviceBroken(az, breaks) ? '1 device broken, ' : ''
   if (!stored || !homeAzs(where).includes(az)) return `${name}: ${broken}no copy here.`
   return `${name}: ${broken}${count(copiesLeft(where, breaks)[az], 'copy', 'copies')}.`
 }
 
 /** What the stage shows, in words, for screen readers. */
 export function describeCopies(where: Where, stored: boolean, breaks: Break[]): string {
-  const intro = `Region ${s3Story.regionCode} with three Availability Zones, each drawn as one data center with four storage devices.`
+  const intro = `Region ${s3Story.regionCode} with three Availability Zones, each with a row of four storage devices.`
   const what = !stored
     ? 'No photo stored yet.'
     : where === 's3-standard'
@@ -70,12 +69,8 @@ export function statusLine(where: Where, stored: boolean, breaks: Break[]): stri
       : `Saved on one EBS volume: copies on devices in ${s3Story.azs[EBS_AZ]} only.`
   }
   if (serving !== null) return `Still loads, from ${s3Story.azs[serving]}: ${left} of ${total} copies left.`
-  if (where === 'ebs') {
-    const az = s3Story.azs[EBS_AZ]
-    if (breaks.some((b) => b.az === EBS_AZ && b.kind === 'az')) return `${az} is out, so the EBS volume can't be read.`
-    if (azOut(EBS_AZ, breaks)) return `The data center in ${az} is out, so the EBS volume can't be read.`
-    return "Both of the volume's copies broke, so the photo can't be read."
-  }
+  // Only a whole AZ going out stops reads (one broken device never does), so this is the volume's AZ being out.
+  if (where === 'ebs') return `${s3Story.azs[EBS_AZ]} is out, so the EBS volume can't be read.`
   return 'Every AZ is out, so no copy is left to read in this Region.'
 }
 
@@ -92,7 +87,7 @@ function Swatch({ className }: { className: string }) {
   return <span aria-hidden className={cn('inline-block h-2.5 w-4 shrink-0 rounded-[2px]', className)} />
 }
 
-/** Visual B: upload a photo, then break a device, a data center or an AZ, and compare S3 Standard with an EBS volume. */
+/** Visual B: upload a photo, then break a device or take out a whole AZ, and compare S3 Standard with an EBS volume. */
 export function CopiesView() {
   const reduced = useReducedMotion() ?? false
   const [where, setWhere] = useState<Where>('s3-standard')
@@ -102,20 +97,25 @@ export function CopiesView() {
   const groupName = useId()
 
   const label = describeCopies(where, stored, breaks)
-  const azGone = breaks.some((b) => b.az === target && b.kind === 'az')
-  const dcGone = azOut(target, breaks)
-  const canDevice = stored && !dcGone && devicesBroken(target, breaks) === 0
-  const canDc = stored && !dcGone
+  const azGone = azOut(target, breaks)
+  const canDevice = stored && !azGone && !deviceBroken(target, breaks)
   const canAz = stored && !azGone
   const why = !stored
-    ? 'Upload the photo first.'
+    ? where === 's3-standard'
+      ? 'Upload the photo first.'
+      : 'Save the photo first.'
     : !canAz
       ? `${s3Story.azs[target]} is already out: pick another AZ.`
       : !canDevice
-        ? dcGone
-          ? `${s3Story.azs[target]}'s data center is already out.`
-          : `A device in ${s3Story.azs[target]} is already broken.`
+        ? `A device in ${s3Story.azs[target]} is already broken.`
         : ''
+
+  // Each view starts fresh, so the learner stores the photo and breaks things again for S3 and for EBS.
+  const switchTo = (next: Where) => {
+    setWhere(next)
+    setStored(false)
+    setBreaks([])
+  }
 
   const breakIt = (kind: Break['kind'], ok: boolean) => {
     if (ok) setBreaks((b) => [...b, { kind, az: target }])
@@ -134,8 +134,8 @@ export function CopiesView() {
       title="Try it: break things and keep the photo"
       intro={
         <>
-          <strong className="text-screen-text">Upload the photo</strong>, then break a device, a data center or a whole{' '}
-          <Term k="availability-zone">AZ</Term> and see if it still loads.
+          <strong className="text-screen-text">Upload the photo</strong>, then break a device or take out a whole{' '}
+          <Term k="availability-zone">AZ</Term>, and see if it still loads.
         </>
       }
       onReset={reset}
@@ -159,7 +159,7 @@ export function CopiesView() {
             tone="screen"
             label="Show an EBS volume instead"
             checked={where === 'ebs'}
-            onChange={(on) => setWhere(on ? 'ebs' : 's3-standard')}
+            onChange={(on) => switchTo(on ? 'ebs' : 's3-standard')}
           />
         </div>
 
@@ -200,10 +200,6 @@ export function CopiesView() {
               <HardDrive aria-hidden />
               Break a device
             </button>
-            <button type="button" className={darkButton} aria-disabled={!canDc} onClick={() => breakIt('datacenter', canDc)}>
-              <Building aria-hidden />
-              Break its data center
-            </button>
             <button type="button" className={darkButton} aria-disabled={!canAz} onClick={() => breakIt('az', canAz)}>
               <ZapOff aria-hidden />
               Take out the AZ
@@ -241,7 +237,7 @@ export function CopiesView() {
           <DashLine color="var(--color-region)" /> <Term k="region">Region</Term> {s3Story.regionCode}
         </li>
         <li className="flex items-center gap-1.5">
-          <DashLine color="var(--color-az)" /> <Term k="availability-zone">Availability Zone</Term>
+          <DashLine color="var(--color-az)" /> <Term k="availability-zone">Availability Zone</Term> (one or more data centers)
         </li>
         <li className="flex items-center gap-1.5">
           <Swatch className="border border-screen-dim" /> <Term k="data-center">Data center</Term>

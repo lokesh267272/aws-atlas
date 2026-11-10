@@ -78,9 +78,8 @@ describe('buckets lesson', () => {
       ['s3-standard', true, []],
       ['ebs', true, []],
       ['s3-standard', true, [{ kind: 'device', az: 0 }]],
-      ['ebs', true, [{ kind: 'datacenter', az: 0 }]],
+      ['ebs', true, [{ kind: 'device', az: 0 }]],
       ['ebs', true, [{ kind: 'az', az: 0 }]],
-      ['ebs', true, [{ kind: 'device', az: 0 }, { kind: 'device', az: 0 }]],
       ['s3-standard', true, [{ kind: 'az', az: 0 }, { kind: 'az', az: 1 }, { kind: 'az', az: 2 }]],
     ]
     for (const [where, stored, breaks] of cases) {
@@ -90,6 +89,24 @@ describe('buckets lesson', () => {
     }
     expect(statusLine('ebs', true, [{ kind: 'az', az: 0 }])).toMatch(/can't be read/)
     expect(statusLine('s3-standard', true, [{ kind: 'az', az: 0 }])).toMatch(/Still loads/)
+    // EBS keeps copies on several servers inside its AZ, so one broken device does not stop reads.
+    expect(statusLine('ebs', true, [{ kind: 'device', az: 0 }])).toMatch(/Still loads/)
+  })
+
+  it('offers two kinds of break only (a device, a whole AZ) and makes no data-center claims', () => {
+    const view = renderToStaticMarkup(<CopiesView />)
+    expect(view).toMatch(/>Break a device</)
+    expect(view).toMatch(/>Take out the AZ</)
+    expect(view).not.toMatch(/data center is out|Data center out|Break its data center/i)
+    expect(view).toMatch(/one or more data centers/)
+    const flat = renderToStaticMarkup(<CopiesFallback where="ebs" stored breaks={[{ kind: 'device', az: 0 }]} label="" />)
+    expect(flat).not.toMatch(/Data center out/)
+    expect(flat).toMatch(/Reads from ap-south-1a/)
+    for (const b of [[], [{ kind: 'device', az: 0 }], [{ kind: 'az', az: 0 }]] as Break[][])
+      for (const where of ['s3-standard', 'ebs'] as const) {
+        expect(describeCopies(where, true, b)).not.toMatch(/data center is out|drawn as one data center/)
+        expect(statusLine(where, true, b)).not.toMatch(/data center/i)
+      }
   })
 
   it('offers every bucket step as a keyboard control, with drag only as an extra', () => {

@@ -5,10 +5,10 @@ import { s3Story } from '../../story'
 import {
   AZ_INDEXES,
   DATA_DEVICES,
-  DEVICES_PER_DC,
+  DEVICES_PER_AZ,
   azOut,
   copiesLeft,
-  devicesBroken,
+  deviceBroken,
   homeAzs,
   servingAz,
   type AzIndex,
@@ -16,7 +16,7 @@ import {
   type Where,
 } from './bucketsModel'
 
-/* Layout of one data center in viewBox units. Sized so text stays about 12px tall or more on a phone. */
+/* Layout of one AZ's row of devices in viewBox units. Sized so text stays about 12px tall or more on a phone. */
 const VIEW = { w: 168, h: 84 }
 const DEV = { x0: 16, gap: 38, y: 40, w: 28, h: 36 }
 const CARD = { h: 7 }
@@ -24,8 +24,8 @@ const CARD = { h: 7 }
 /** Fades colour changes; no motion when the device asks for less. */
 const fade = 'transition-[fill,stroke,opacity] duration-300 motion-reduce:transition-none'
 
-/** One data center: four devices, a green card on each device holding a copy, red where something broke. */
-function DataCenterSvg({ out, broken, holds }: { out: boolean; broken: number; holds: boolean }) {
+/** One AZ's storage devices: a green card on each device holding a copy, red where something broke. */
+function DevicesSvg({ out, broken, holds }: { out: boolean; broken: boolean; holds: boolean }) {
   return (
     <svg viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} aria-hidden className="block h-auto w-full max-w-[260px]">
       <rect
@@ -40,12 +40,13 @@ function DataCenterSvg({ out, broken, holds }: { out: boolean; broken: number; h
         className={fade}
       />
       <text x="10" y="18" fontSize="12" fontWeight="700" fill={out ? 'var(--color-bad)' : 'var(--color-ink-2)'}>
-        {out ? 'Data center out' : 'Data center'}
+        {out ? 'Whole AZ out' : 'Storage devices'}
       </text>
-      {Array.from({ length: DEVICES_PER_DC }, (_, i) => {
+      {Array.from({ length: DEVICES_PER_AZ }, (_, i) => {
         const x = DEV.x0 + i * DEV.gap
         const dataAt = (DATA_DEVICES as readonly number[]).indexOf(i)
-        const isBroken = dataAt >= 0 && dataAt < broken
+        // A broken device is the first one holding a copy.
+        const isBroken = broken && dataAt === 0
         const hasCopy = holds && dataAt >= 0
         const copyLost = hasCopy && (out || isBroken)
         return (
@@ -100,7 +101,7 @@ function azNote(where: Where, az: AzIndex, stored: boolean, breaks: Break[]): st
 
 /**
  * The flat version of the copies scene, used without WebGL. Same state, same meaning:
- * a Region with three AZs, one data center of devices in each, green copies of the photo, red where something broke.
+ * a Region with three AZs, a row of storage devices in each, green copies of the photo, red where something broke.
  */
 export function CopiesFallback({ where, stored, breaks, label }: { where: Where; stored: boolean; breaks: Break[]; label: string }) {
   const serving = stored ? servingAz(where, breaks) : null
@@ -133,7 +134,7 @@ export function CopiesFallback({ where, stored, breaks, label }: { where: Where;
                   muted={azBroken}
                   highlighted={azBroken}
                 >
-                  <DataCenterSvg out={azOut(az, breaks)} broken={devicesBroken(az, breaks)} holds={stored && homeAzs(where).includes(az)} />
+                  <DevicesSvg out={azOut(az, breaks)} broken={deviceBroken(az, breaks)} holds={stored && homeAzs(where).includes(az)} />
                   <p className="mt-1 text-xs font-bold text-ink-2">{azNote(where, az, stored, breaks)}</p>
                 </Boundary>
               )

@@ -126,9 +126,13 @@ describe('where the copies live', () => {
     expect(readable('ebs', [{ kind: 'device', az: 0 }])).toBe(true)
   })
 
-  it('S3 Standard survives a data center going out; the EBS volume does not when it is in that AZ', () => {
-    expect(readable('s3-standard', [{ kind: 'datacenter', az: 0 }])).toBe(true)
-    expect(readable('ebs', [{ kind: 'datacenter', az: 0 }])).toBe(false)
+  it('a second broken device in the same AZ adds nothing: the sim claims only that one device failing loses nothing', () => {
+    expect(copiesLeft('ebs', [{ kind: 'device', az: 0 }, { kind: 'device', az: 0 }])).toEqual([1, 0, 0])
+    expect(readable('ebs', [{ kind: 'device', az: 0 }, { kind: 'device', az: 0 }])).toBe(true)
+  })
+
+  it('a broken device and a whole AZ out in the same AZ: the AZ wins', () => {
+    expect(copiesLeft('s3-standard', [{ kind: 'device', az: 0 }, { kind: 'az', az: 0 }])).toEqual([0, 2, 2])
   })
 
   it('breaking AZs the EBS volume is not in leaves it readable', () => {
@@ -136,7 +140,7 @@ describe('where the copies live', () => {
   })
 
   it('S3 Standard is unreadable only when every AZ in the Region is out', () => {
-    expect(readable('s3-standard', [{ kind: 'az', az: 0 }, { kind: 'datacenter', az: 1 }, { kind: 'az', az: 2 }])).toBe(false)
+    expect(readable('s3-standard', [{ kind: 'az', az: 0 }, { kind: 'az', az: 1 }, { kind: 'az', az: 2 }])).toBe(false)
   })
 
   it('counts copies per AZ: two in each for S3 Standard, two in AZ 0 only for EBS', () => {

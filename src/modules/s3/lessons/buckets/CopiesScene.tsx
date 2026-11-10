@@ -8,10 +8,10 @@ import { s3Story } from '../../story'
 import {
   AZ_INDEXES,
   DATA_DEVICES,
-  DEVICES_PER_DC,
+  DEVICES_PER_AZ,
   azOut,
   copiesLeft,
-  devicesBroken,
+  deviceBroken,
   homeAzs,
   servingAz,
   type AzIndex,
@@ -22,12 +22,12 @@ import {
 /** The storage category colour (--color-storage): the photo and its copies. three.js cannot read CSS variables. */
 const STORAGE = '#7aa116'
 
-/* Layout in scene units. Three AZ platforms left to right, each with one data center of four devices; the photo in front. */
+/* Layout in scene units. Three AZ platforms left to right, each with a building of four storage devices; the photo in front. */
 const AZ_X = [-2.3, 0, 2.3]
 const PLAT = { w: 2.05, d: 2.0, h: 0.12 }
-const DC = { w: 1.62, h: 0.66, d: 1.0, z: -0.2 }
+const BUILDING = { w: 1.62, h: 0.66, d: 1.0, z: -0.2 }
 const DEVICE = { w: 0.26, h: 0.36, d: 0.6 }
-const DEVICE_X = Array.from({ length: DEVICES_PER_DC }, (_, i) => (i - (DEVICES_PER_DC - 1) / 2) * 0.36)
+const DEVICE_X = Array.from({ length: DEVICES_PER_AZ }, (_, i) => (i - (DEVICES_PER_AZ - 1) / 2) * 0.36)
 const CARD = { w: 0.22, h: 0.035, d: 0.3 }
 /** Where a copy rests: on top of its device. */
 const REST_Y = DEVICE.h + CARD.h / 2 + 0.01
@@ -132,7 +132,7 @@ const RED = new Color(HEX.bad)
 
 /**
  * One copy of the photo: a small green card that flies from the photo to its device when stored, and turns into a faded
- * red mark when its device, data center or AZ breaks. The copy that serves reads also draws the read path to the photo.
+ * red mark when its device breaks or its whole AZ goes out. The copy that serves reads also draws the read path to the photo.
  * It lives inside its AZ's group, so it sinks with the AZ.
  */
 function Copy({
@@ -145,7 +145,7 @@ function Copy({
   reduced,
 }: {
   az: AzIndex
-  /** Which device in the data center holds it. */
+  /** Which device in the AZ holds it. */
   slot: number
   /** Position in the upload, for a short stagger. */
   order: number
@@ -161,7 +161,7 @@ function Copy({
   const material = useRef<MeshLambertMaterial>(null)
   const path = useRef<Group>(null)
   const from = useMemo(() => new Vector3(PHOTO.x - AZ_X[az], PHOTO.y - PHOTO.h, PHOTO.z), [az])
-  const to = useMemo(() => new Vector3(DEVICE_X[slot], REST_Y, DC.z), [slot])
+  const to = useMemo(() => new Vector3(DEVICE_X[slot], REST_Y, BUILDING.z), [slot])
   const delay = order * STAGGER
   // Start at the end state, so a scene that loads after an upload does not replay it.
   const cur = useRef({ t: wanted ? FLY + delay : 0, dead: alive ? 0 : 1 })
@@ -224,12 +224,12 @@ function Copy({
   )
 }
 
-/* ------------------------------------------------------------------ Data center */
+/* ------------------------------------------------------------------ Devices */
 
 function Device({ x, broken, dark }: { x: number; broken: boolean; dark: boolean }) {
   const color = broken ? HEX.bad : dark ? HEX.screen : HEX.line
   return (
-    <mesh position={[x, DEVICE.h / 2, DC.z]}>
+    <mesh position={[x, DEVICE.h / 2, BUILDING.z]}>
       <boxGeometry args={[DEVICE.w, DEVICE.h, DEVICE.d]} />
       <meshLambertMaterial color={color} toneMapped={false} />
       <Edges color={broken ? HEX.bad : HEX.dim} transparent opacity={dark ? 0.3 : 0.75} />
@@ -237,17 +237,20 @@ function Device({ x, broken, dark }: { x: number; broken: boolean; dark: boolean
   )
 }
 
-/** One data center: a see-through building with a row of storage devices inside. */
-function DataCenter({ out, broken }: { out: boolean; broken: number }) {
+/**
+ * The AZ's storage: a see-through data center building with a row of devices inside (a real AZ has one or more data
+ * centers; the sim draws one). `out` greys it with its AZ; `broken` marks the first device holding a copy.
+ */
+function Storage({ out, broken }: { out: boolean; broken: boolean }) {
   return (
     <group>
-      <mesh position={[0, DC.h / 2, DC.z]}>
-        <boxGeometry args={[DC.w, DC.h, DC.d]} />
+      <mesh position={[0, BUILDING.h / 2, BUILDING.z]}>
+        <boxGeometry args={[BUILDING.w, BUILDING.h, BUILDING.d]} />
         <meshBasicMaterial color={out ? HEX.bad : HEX.screen2} transparent opacity={out ? 0.18 : 0.3} depthWrite={false} toneMapped={false} />
         <Edges color={out ? HEX.bad : HEX.dim} transparent opacity={out ? 0.9 : 0.55} />
       </mesh>
       {DEVICE_X.map((x, i) => (
-        <Device key={i} x={x} broken={DATA_DEVICES.slice(0, broken).includes(i as (typeof DATA_DEVICES)[number])} dark={out} />
+        <Device key={i} x={x} broken={broken && i === DATA_DEVICES[0]} dark={out} />
       ))}
     </group>
   )
@@ -342,26 +345,23 @@ function AzPlatform({
   )
 }
 
-/** The tag over a data center: how many copies it holds, or what broke. */
-function dcTag(where: Where, az: AzIndex, stored: boolean, breaks: Break[], narrow: boolean): { text: string; kind: LabelKind } | null {
-  const azBroken = breaks.some((b) => b.az === az && b.kind === 'az')
-  if (azBroken) return null
-  if (breaks.some((b) => b.az === az && b.kind === 'datacenter')) return { text: narrow ? 'Out' : 'Data center out', kind: 'bad' }
-  if (!stored) return null
+/** The tag over an AZ's devices: how many copies it holds, and whether a device broke. The AZ's own label says when it is out. */
+function copiesTag(where: Where, az: AzIndex, stored: boolean, breaks: Break[], narrow: boolean): { text: string; kind: LabelKind } | null {
+  if (azOut(az, breaks) || !stored) return null
   if (!homeAzs(where).includes(az)) return narrow ? null : { text: 'no copy here', kind: 'dim' }
   const n = copiesLeft(where, breaks)[az]
   const copies = `${n} ${n === 1 ? 'copy' : 'copies'}`
   if (narrow) return { text: copies, kind: 'copy' }
-  const broken = devicesBroken(az, breaks) > 0 ? ', 1 device broken' : ''
+  const broken = deviceBroken(az, breaks) ? ', 1 device broken' : ''
   return { text: where === 'ebs' ? `EBS volume: ${copies}${broken}` : `${copies}${broken}`, kind: 'copy' }
 }
 
 /* ------------------------------------------------------------------ Scene */
 
 /**
- * Where a photo really lives, in 3D: a teal dashed Region with three AZ platforms, one data center of devices on each.
+ * Where a photo really lives, in 3D: a teal dashed Region with three AZ platforms, a row of storage devices on each.
  * Uploading to S3 Standard sends copies to devices in all three AZs; an EBS volume keeps its copies in one AZ.
- * Breaking a device, a data center or a whole AZ marks what is lost; the read path shows which copy still answers.
+ * Breaking a device or taking out a whole AZ marks what is lost; the read path shows which copy still answers.
  * Loaded lazily inside Scene3D. Draws on demand and asks for frames only while something moves.
  */
 export default function CopiesScene({
@@ -417,14 +417,15 @@ export default function CopiesScene({
 
       {AZ_INDEXES.map((az) => {
         const out = azOut(az, breaks)
-        const broken = devicesBroken(az, breaks)
-        const tag = dcTag(where, az, stored, breaks, narrow)
-        const servingSlot = DATA_DEVICES[broken]
+        const broken = deviceBroken(az, breaks)
+        const tag = copiesTag(where, az, stored, breaks, narrow)
+        // Reads come from the first copy still standing in the serving AZ.
+        const servingSlot = DATA_DEVICES[broken ? 1 : 0]
         return (
-          <AzPlatform key={az} index={az} out={breaks.some((b) => b.az === az && b.kind === 'az')} reduced={reduced} narrow={narrow}>
-            <DataCenter out={out} broken={broken} />
+          <AzPlatform key={az} index={az} out={out} reduced={reduced} narrow={narrow}>
+            <Storage out={out} broken={broken} />
             {tag && (
-              <Label position={[0, DC.h + 0.08, DC.z]} kind={tag.kind} place="above">
+              <Label position={[0, BUILDING.h + 0.08, BUILDING.z]} kind={tag.kind} place="above">
                 {tag.text}
               </Label>
             )}
@@ -435,7 +436,7 @@ export default function CopiesScene({
                 slot={slot}
                 order={az * DATA_DEVICES.length + i}
                 wanted={stored && homes.includes(az)}
-                alive={!out && i >= broken}
+                alive={!out && !(broken && i === 0)}
                 serving={serving === az && slot === servingSlot}
                 reduced={reduced}
               />
