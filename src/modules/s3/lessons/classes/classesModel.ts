@@ -52,14 +52,31 @@ export function monthStorePrice(id: ClassId): number {
 
 export interface BillLine {
   prefix: PrefixId
+  /** Keeping the stored GB for the month. */
   store: number
   fetch: number
+  /** Intelligent-Tiering's fee per object. */
   monitoring: number
+  /** Extra days billed because the files are deleted before the shelf's minimum storage duration. */
+  minDuration: number
 }
 
 /**
- * One month's bill. A one-month view: Intelligent-Tiering is billed at its frequent tier plus monitoring,
- * and minimum storage durations don't apply within the month (lesson 5 teaches them).
+ * For files Mealhop deletes before the shelf's minimum storage duration: how long they live, and how long
+ * they are billed. Null when the minimum doesn't bite (kept files, or a minimum no longer than their life).
+ */
+export function billedDays(prefix: PrefixId, id: ClassId): { lives: number; billed: number } | null {
+  const f = FILE_TYPES[prefix]
+  const min = classById(id).minDays
+  if (!f.deleteAfterKeep || f.keepDays === null || min <= f.keepDays) return null
+  return { lives: f.keepDays, billed: min }
+}
+
+/**
+ * One month's bill, in a steady month: Intelligent-Tiering is billed at its frequent tier plus monitoring,
+ * since nothing has gone 30 days unread yet. Files that live only 30 days (delivery photos, backups) are
+ * deleted each month, so a shelf with a longer minimum bills each batch for the full minimum: the extra days
+ * show as `minDuration`.
  */
 export function monthCost(p: Placement): { lines: BillLine[]; total: number } {
   const lines = PREFIX_IDS.map((prefix): BillLine => {
@@ -70,9 +87,11 @@ export function monthCost(p: Placement): { lines: BillLine[]; total: number } {
       0,
     )
     const monitoring = id === 'intelligent-tiering' ? (objectCount(prefix) / 1000) * INTELLIGENT_TIERS.monitoringPer1000Objects : 0
-    return { prefix, store, fetch, monitoring }
+    const days = billedDays(prefix, id)
+    const minDuration = days ? (store * (days.billed - days.lives)) / days.lives : 0
+    return { prefix, store, fetch, monitoring, minDuration }
   })
-  return { lines, total: lines.reduce((n, l) => n + l.store + l.fetch + l.monitoring, 0) }
+  return { lines, total: lines.reduce((n, l) => n + l.store + l.fetch + l.monitoring + l.minDuration, 0) }
 }
 
 export type StepResult =

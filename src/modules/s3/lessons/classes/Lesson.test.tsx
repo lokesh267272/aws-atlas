@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { checkTextBudget, S3_LIMITS } from '../../../../test/textBudget'
 import { CLASSES } from '../../storageClasses'
 import Lesson from './Lesson'
-import { MonthBoard } from './MonthBoard'
+import { Bill, FileRow, MonthBoard } from './MonthBoard'
+import { solution, type Placement } from './classesModel'
 import { ShelfReadouts, Shelves } from './Shelves'
 
 describe('classes lesson', () => {
@@ -92,5 +93,27 @@ describe('month board', () => {
     for (const text of ['menu photos all month', 'one delivery photo', 'last night&#x27;s backup', 'a few reports', 'receipts'])
       expect(html).toContain(text)
     expect(html).toMatch(/ap-south-1a is destroyed/)
+  })
+})
+
+describe('minimum-day charges on screen', () => {
+  const billFor = (p: Placement) => renderToStaticMarkup(<Bill placement={p} finished={false} />)
+
+  it('the bill shows a labelled line when a 30-day file sits on a 90-day shelf', () => {
+    const html = billFor({ ...solution, delivery: 'glacier-ir' })
+    expect(html).toMatch(/lives 30 days, billed 90/)
+    expect(html).toMatch(/\+\$9\.00/)
+    expect(html).toMatch(/minimum days/)
+  })
+
+  it('the recommended shelves have no such line', () => {
+    expect(billFor(solution)).not.toMatch(/billed 90|billed 180/)
+  })
+
+  it('the rows say which files are deleted after 30 days, and warn on a longer minimum', () => {
+    expect(renderToStaticMarkup(<MonthBoard />)).toMatch(/deleted after 30 days/)
+    const row = renderToStaticMarkup(<FileRow id="backups" uid="t" value="deep-archive" onPick={() => {}} />)
+    expect(row).toMatch(/lives 30 days, billed 180/)
+    expect(renderToStaticMarkup(<FileRow id="backups" uid="t" value="standard-ia" onPick={() => {}} />)).not.toMatch(/billed/)
   })
 })

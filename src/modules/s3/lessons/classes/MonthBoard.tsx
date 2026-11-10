@@ -12,6 +12,7 @@ import {
   MONTH_BUDGET,
   MONTH_EVENTS,
   ONE_ZONE_AZ,
+  billedDays,
   START_PLACEMENT,
   monthCost,
   playMonth,
@@ -183,7 +184,7 @@ export function MonthBoard() {
               challenge.show()
             })
           }}
-          successNote="Each file sits on a shelf that suits how often it is read, comes back in time, and stays in one AZ only if it can be re-made."
+          successNote="Every fetch came back in time, only files you can re-make sat in one AZ, and the whole bill, minimum days included, fit the budget."
         />
       </div>
 
@@ -228,7 +229,7 @@ export function MonthBoard() {
         </div>
       </div>
 
-      <Bill lines={bill.lines} total={bill.total} under={under} finished={finished} />
+      <Bill placement={placement} finished={finished} />
 
       <p className="sr-only" aria-live="polite">
         {finished
@@ -245,10 +246,12 @@ export function MonthBoard() {
 
 /* ------------------------------------------------------------------ Parts */
 
-function FileRow({ id, uid, value, onPick }: { id: PrefixId; uid: string; value: ClassId; onPick: (c: ClassId) => void }) {
+export function FileRow({ id, uid, value, onPick }: { id: PrefixId; uid: string; value: ClassId; onPick: (c: ClassId) => void }) {
   const ft = FILE_TYPES[id]
   const { icon: Icon, use } = ROWS[id]
   const selectId = `${uid}-${id}`
+  const days = billedDays(id, value)
+  const deleted = ft.deleteAfterKeep && ft.keepDays !== null ? `, deleted after ${ft.keepDays} days` : ''
   return (
     <li className="rounded-md border border-line bg-paper/60 p-3">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
@@ -260,6 +263,7 @@ function FileRow({ id, uid, value, onPick }: { id: PrefixId; uid: string; value:
           </p>
           <p className="text-sm text-ink-3">
             {size(ft.storedGb)}, {use}
+            {deleted}
           </p>
         </div>
         <div className="w-full sm:w-56">
@@ -277,6 +281,11 @@ function FileRow({ id, uid, value, onPick }: { id: PrefixId; uid: string; value:
       </div>
       {value === 'intelligent-tiering' && (
         <p className="mt-1.5 text-xs text-ink-3">Standard price this month (nothing has gone 30 days unread yet), plus a fee per object</p>
+      )}
+      {days && (
+        <p className="mt-1.5 text-xs font-bold text-warn">
+          <Term k="minimum-storage-duration">Minimum</Term>: lives {days.lives} days, billed {days.billed} on this shelf
+        </p>
       )}
     </li>
   )
@@ -419,9 +428,14 @@ function AzMap({ placement, destroyed }: { placement: Placement; destroyed: numb
   )
 }
 
-/** The month's bill, one line per file type: keeping (storage colour), fetching and monitoring. */
-function Bill({ lines, total, under, finished }: { lines: BillLine[]; total: number; under: boolean; finished: boolean }) {
-  const lineTotal = (l: BillLine) => l.store + l.fetch + l.monitoring
+/**
+ * The month's bill, one line per file type: keeping (storage colour), extra minimum days (paler storage colour),
+ * fetching and monitoring.
+ */
+export function Bill({ placement, finished }: { placement: Placement; finished: boolean }) {
+  const { lines, total } = monthCost(placement)
+  const under = total <= MONTH_BUDGET
+  const lineTotal = (l: BillLine) => l.store + l.minDuration + l.fetch + l.monitoring
   const scale = Math.max(20, ...lines.map(lineTotal))
   return (
     <div className="mt-5 rounded-md border border-line bg-paper/60 p-3">
@@ -433,21 +447,33 @@ function Bill({ lines, total, under, finished }: { lines: BillLine[]; total: num
         </Pill>
       </div>
       <ul className="mt-2 grid gap-2">
-        {lines.map((l) => (
-          <li key={l.prefix} className="grid grid-cols-[5.5rem_minmax(0,1fr)_4.5rem] items-center gap-x-2">
-            <code className="truncate text-xs font-bold text-ink">{FILE_TYPES[l.prefix].prefix}</code>
-            <span aria-hidden className="flex h-3 min-w-0 overflow-hidden rounded-[3px] bg-sunken">
-              <span className="h-full bg-storage motion-safe:transition-[width]" style={{ width: `${(l.store / scale) * 100}%` }} />
-              <span className="h-full bg-ink-3 motion-safe:transition-[width]" style={{ width: `${(l.fetch / scale) * 100}%` }} />
-              <span className="h-full bg-warn motion-safe:transition-[width]" style={{ width: `${(l.monitoring / scale) * 100}%` }} />
-            </span>
-            <span className="text-right text-sm font-bold tabular-nums text-ink">{money(lineTotal(l))}</span>
-            <span className="col-span-3 text-xs text-ink-3">
-              keep {money(l.store)}, fetch {money(l.fetch)}
-              {l.monitoring > 0 && <>, monitoring {money(l.monitoring)}</>}
-            </span>
-          </li>
-        ))}
+        {lines.map((l) => {
+          const days = billedDays(l.prefix, placement[l.prefix])
+          return (
+            <li key={l.prefix} className="grid grid-cols-[5.5rem_minmax(0,1fr)_4.5rem] items-center gap-x-2">
+              <code className="truncate text-xs font-bold text-ink">{FILE_TYPES[l.prefix].prefix}</code>
+              <span aria-hidden className="flex h-3 min-w-0 overflow-hidden rounded-[3px] bg-sunken">
+                <span className="h-full bg-storage motion-safe:transition-[width]" style={{ width: `${(l.store / scale) * 100}%` }} />
+                <span
+                  className="h-full bg-storage/45 motion-safe:transition-[width]"
+                  style={{ width: `${(l.minDuration / scale) * 100}%` }}
+                />
+                <span className="h-full bg-ink-3 motion-safe:transition-[width]" style={{ width: `${(l.fetch / scale) * 100}%` }} />
+                <span className="h-full bg-warn motion-safe:transition-[width]" style={{ width: `${(l.monitoring / scale) * 100}%` }} />
+              </span>
+              <span className="text-right text-sm font-bold tabular-nums text-ink">{money(lineTotal(l))}</span>
+              <span className="col-span-3 text-xs text-ink-3">
+                keep {money(l.store)}, fetch {money(l.fetch)}
+                {l.monitoring > 0 && <>, monitoring {money(l.monitoring)}</>}
+              </span>
+              {days && l.minDuration > 0 && (
+                <span className="col-span-3 text-xs font-bold text-warn">
+                  minimum days: lives {days.lives} days, billed {days.billed}: +{money(l.minDuration)}
+                </span>
+              )}
+            </li>
+          )
+        })}
       </ul>
       <div className="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-t border-line pt-2">
         <Readout
@@ -459,6 +485,9 @@ function Bill({ lines, total, under, finished }: { lines: BillLine[]; total: num
         <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
           <li className="flex items-center gap-1.5">
             <span aria-hidden className="size-3 rounded-[2px] bg-storage" /> keep
+          </li>
+          <li className="flex items-center gap-1.5">
+            <span aria-hidden className="size-3 rounded-[2px] bg-storage/45" /> minimum days
           </li>
           <li className="flex items-center gap-1.5">
             <span aria-hidden className="size-3 rounded-[2px] bg-ink-3" /> fetch

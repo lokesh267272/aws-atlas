@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { classById, type ClassId } from '../../storageClasses'
-import { FILE_TYPES, PREFIX_IDS, RECOMMENDED_CLASSES } from '../../story'
+import { FILE_TYPES, PREFIX_IDS, RECOMMENDED_CLASSES, type PrefixId } from '../../story'
 import {
   MONTH_BUDGET,
   MONTH_EVENTS,
   ONE_ZONE_AZ,
   monthCost,
+  billedDays,
   objectCount,
   playMonth,
   runMonth,
@@ -78,11 +79,13 @@ describe('the month (details)', () => {
     expect(receipts.fetch).toBe(0)
   })
 
-  it('totals the lines', () => {
-    const bill = monthCost(solution)
-    const sum = bill.lines.reduce((n, l) => n + l.store + l.fetch + l.monitoring, 0)
-    expect(bill.total).toBeCloseTo(sum)
-    expect(runMonth(solution).cost).toBeCloseTo(bill.total)
+  it('totals the lines, minimum-duration charges included', () => {
+    for (const p of [solution, { ...solution, delivery: 'glacier-ir' as const, backups: 'deep-archive' as const }]) {
+      const bill = monthCost(p)
+      const sum = bill.lines.reduce((n, l) => n + l.store + l.fetch + l.monitoring + l.minDuration, 0)
+      expect(bill.total).toBeCloseTo(sum)
+      expect(runMonth(p).cost).toBeCloseTo(bill.total)
+    }
   })
 
   it('the solution fits the budget with little to spare, so the budget is not trivial', () => {
@@ -113,8 +116,57 @@ describe('the month (details)', () => {
   })
 
   it('is solved only when under budget, on time and nothing lost', () => {
+    expect(runMonth(solution).solved).toBe(true)
     expect(runMonth(all('standard')).solved).toBe(false)
     expect(runMonth({ ...solution, delivery: 'deep-archive' }).solved).toBe(false)
     expect(runMonth({ ...solution, menu: 'one-zone-ia' }).solved).toBe(false)
+  })
+})
+
+describe('minimum storage durations (files that live only 30 days)', () => {
+  const line = (p: Placement, prefix: PrefixId) => monthCost(p).lines.find((l) => l.prefix === prefix)!
+
+  it('delivery or backups on Glacier Instant Retrieval add a minimum-duration charge', () => {
+    expect(line({ ...solution, delivery: 'glacier-ir' }, 'delivery').minDuration).toBeGreaterThan(0)
+    expect(line({ ...solution, backups: 'glacier-ir' }, 'backups').minDuration).toBeGreaterThan(0)
+  })
+
+  it('on Standard-IA (a 30-day minimum) they add nothing', () => {
+    expect(line(solution, 'delivery').minDuration).toBe(0)
+    expect(line(solution, 'backups').minDuration).toBe(0)
+  })
+
+  it('bills 90 days on a 90-day shelf and 180 on Deep Archive', () => {
+    const gir = line({ ...solution, delivery: 'glacier-ir' }, 'delivery')
+    expect(gir.minDuration).toBeCloseTo(gir.store * 2)
+    const flex = line({ ...solution, backups: 'glacier-flexible' }, 'backups')
+    expect(flex.minDuration).toBeCloseTo(flex.store * 2)
+    const deep = line({ ...solution, delivery: 'deep-archive' }, 'delivery')
+    expect(deep.minDuration).toBeCloseTo(deep.store * 5)
+    expect(billedDays('delivery', 'glacier-ir')).toEqual({ lives: 30, billed: 90 })
+    expect(billedDays('delivery', 'deep-archive')).toEqual({ lives: 30, billed: 180 })
+    expect(billedDays('delivery', 'standard-ia')).toBeNull()
+  })
+
+  it('never applies to files Mealhop keeps', () => {
+    const glacier = all('glacier-ir')
+    for (const p of ['menu', 'receipts', 'reports'] as const) expect(line(glacier, p).minDuration).toBe(0)
+    expect(billedDays('receipts', 'deep-archive')).toBeNull()
+  })
+
+  it('Glacier IR or Flexible no longer beats Standard-IA for delivery or backups', () => {
+    const base = runMonth(solution).cost
+    for (const prefix of ['delivery', 'backups'] as const) {
+      // Glacier IR is on time but now costs more than Standard-IA...
+      expect(runMonth({ ...solution, [prefix]: 'glacier-ir' }).cost).toBeGreaterThan(base)
+      // ...and Glacier Flexible is cheaper but too slow, so it can't pass.
+      expect(runMonth({ ...solution, [prefix]: 'glacier-flexible' }).late.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('One Zone-IA for reports passes, and Glacier IR on a 30-day file breaks the budget on its own', () => {
+    expect(runMonth({ ...solution, reports: 'one-zone-ia' }).solved).toBe(true)
+    expect(runMonth({ ...solution, delivery: 'glacier-ir' }).solved).toBe(false)
+    expect(runMonth({ ...solution, backups: 'glacier-ir' }).solved).toBe(false)
   })
 })
