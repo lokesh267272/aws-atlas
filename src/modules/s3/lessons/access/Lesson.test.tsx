@@ -31,16 +31,16 @@ describe('access lesson', () => {
   })
 
   it('never presents a public bucket as the way to share', () => {
-    expect(renderToStaticMarkup(<Lesson />)).not.toMatch(/make (the bucket|it) public to/i)
+    expect(html).not.toMatch(/make (the bucket|it) public to/i)
   })
 
   it('does not claim role-signed links last 7 days', () => {
-    expect(renderToStaticMarkup(<Lesson />)).not.toMatch(/role[^.]*7 days/i)
+    expect(html).not.toMatch(/role[^.]*7 days/i)
   })
 
   it('shows the 7-day user-key limit as a tag and the 6-hour role limit', () => {
     expect(text(html)).toMatch(/long-term user key: up to 7 days/i)
-    expect(text(html)).toMatch(/at most 6 hours/)
+    expect(text(html)).toMatch(/about 6 hours at most/)
   })
 
   it('shows that every new file is encrypted by default', () => {

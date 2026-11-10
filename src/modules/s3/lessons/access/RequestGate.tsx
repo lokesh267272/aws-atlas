@@ -392,7 +392,7 @@ function BucketDoor({ config: c }: { config: AccessConfig }) {
       <span className={cn('text-xs font-bold leading-tight', open ? 'text-bad' : 'text-ink-2')}>{open ? 'Open to anyone' : 'Private'}</span>
       <Pill tone={c.blockPublicAccess ? 'ok' : 'warn'} className="max-w-full whitespace-normal text-center leading-tight [&_svg]:shrink-0">
         {c.blockPublicAccess ? <ShieldCheck aria-hidden /> : <ShieldOff aria-hidden />}
-        {c.blockPublicAccess ? 'Public access blocked' : 'Public access allowed'}
+        {c.blockPublicAccess ? 'Public access blocked' : 'Public access not blocked'}
       </Pill>
       <ul className="mt-1 grid w-full gap-1 text-left" aria-label="Files in the bucket">
         {OBJECTS.map((key) => (
@@ -447,7 +447,7 @@ function Controls({ gate }: { gate: AccessGate }) {
                 Ignored while <Term k="block-public-access">Block Public Access</Term> is on
               </span>
             ) : (
-              'Lets anyone read and list every file'
+              'A policy that lets anyone read and list files'
             )}
           </p>
         </div>
