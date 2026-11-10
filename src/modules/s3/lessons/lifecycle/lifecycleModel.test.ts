@@ -95,13 +95,11 @@ describe('the 7-year challenge', () => {
   })
 })
 
-describe('rule problems (S3 refuses these rules)', () => {
-  it('moving into Standard-IA before day 30 is not allowed', () => {
-    expect(
-      ruleProblems({ prefix: 'receipts', transitions: [{ afterDays: 10, to: 'standard-ia' }], expireAfterDays: null, noncurrentExpireAfterDays: null }, 'standard'),
-    ).toContain('ia-too-soon')
-    expect(ruleProblems(rule('receipts', [{ afterDays: 29, to: 'one-zone-ia' }]), 'standard')).toContain('ia-too-soon')
-    expect(ruleProblems(rule('receipts', [{ afterDays: 30, to: 'standard-ia' }]), 'standard')).toEqual([])
+describe('rule problems (S3 rejects these rules)', () => {
+  it('moving into Standard-IA or One Zone-IA is allowed on any day (AWS dropped the 30-day minimum in July 2026)', () => {
+    expect(ruleProblems(rule('receipts', [{ afterDays: 0, to: 'standard-ia' }]), 'standard')).toEqual([])
+    expect(ruleProblems(rule('receipts', [{ afterDays: 10, to: 'standard-ia' }]), 'standard')).toEqual([])
+    expect(ruleProblems(rule('receipts', [{ afterDays: 1, to: 'one-zone-ia' }]), 'standard')).toEqual([])
   })
 
   it('a move back up the shelves is not allowed', () => {
@@ -121,7 +119,18 @@ describe('rule problems (S3 refuses these rules)', () => {
     expect(canMove('one-zone-ia', 'glacier-flexible')).toBe(true)
     expect(canMove('intelligent-tiering', 'standard-ia')).toBe(false)
     expect(canMove('standard', 'deep-archive')).toBe(true)
-    expect(ruleProblems(rule('reports', [{ afterDays: 60, to: 'glacier-ir' }]), 'one-zone-ia')).toEqual(['not-down-the-waterfall'])
+    expect(canMove('standard-ia', 'intelligent-tiering')).toBe(true)
+    // Its own problem, so the card can name the move instead of saying "only down the shelves".
+    expect(ruleProblems(rule('reports', [{ afterDays: 60, to: 'glacier-ir' }]), 'one-zone-ia')).toEqual(['unsupported-move'])
+    expect(
+      ruleProblems(
+        rule('receipts', [
+          { afterDays: 30, to: 'one-zone-ia' },
+          { afterDays: 90, to: 'glacier-ir' },
+        ]),
+        'standard',
+      ),
+    ).toEqual(['unsupported-move'])
   })
 
   it('each move needs more days than the one before', () => {
@@ -132,17 +141,25 @@ describe('rule problems (S3 refuses these rules)', () => {
     expect(ruleProblems(r, 'standard-ia')).toEqual(['days-not-increasing'])
   })
 
-  it('a move out of an IA shelf needs 30 days there first', () => {
-    const r = rule('receipts', [
-      { afterDays: 30, to: 'standard-ia' },
-      { afterDays: 45, to: 'glacier-flexible' },
-    ])
-    expect(ruleProblems(r, 'standard')).toEqual(['next-step-too-soon'])
-    const ok = rule('receipts', [
-      { afterDays: 30, to: 'standard-ia' },
-      { afterDays: 60, to: 'glacier-flexible' },
-    ])
-    expect(ruleProblems(ok, 'standard')).toEqual([])
+  it('the next move waits out the minimum stay of the shelf the rule moved files to', () => {
+    const two = (a: Rule['transitions'][number], b: Rule['transitions'][number]) => ruleProblems(rule('receipts', [a, b]), 'standard')
+    // IA shelves: 30 days.
+    expect(two({ afterDays: 30, to: 'standard-ia' }, { afterDays: 45, to: 'glacier-flexible' })).toEqual(['next-step-too-soon'])
+    expect(two({ afterDays: 30, to: 'standard-ia' }, { afterDays: 60, to: 'glacier-flexible' })).toEqual([])
+    // AWS's own example: Glacier IR after 4 days, then Deep Archive after 20, is rejected; day 94 is the earliest.
+    expect(two({ afterDays: 4, to: 'glacier-ir' }, { afterDays: 20, to: 'deep-archive' })).toEqual(['next-step-too-soon'])
+    expect(two({ afterDays: 4, to: 'glacier-ir' }, { afterDays: 93, to: 'deep-archive' })).toEqual(['next-step-too-soon'])
+    expect(two({ afterDays: 4, to: 'glacier-ir' }, { afterDays: 94, to: 'deep-archive' })).toEqual([])
+    // Glacier Flexible Retrieval: 90 days too.
+    expect(two({ afterDays: 30, to: 'glacier-flexible' }, { afterDays: 60, to: 'deep-archive' })).toEqual(['next-step-too-soon'])
+    // Intelligent-Tiering has no minimum, so the next move can follow a day later.
+    expect(two({ afterDays: 30, to: 'intelligent-tiering' }, { afterDays: 31, to: 'glacier-ir' })).toEqual([])
+  })
+
+  it('so a rule can no longer move receipts off Glacier IR early and earn a "billed 90 days" charge', () => {
+    const early = rule('receipts', [{ afterDays: 30, to: 'glacier-ir' }, { afterDays: 60, to: 'deep-archive' }], 2555, 1)
+    expect(ruleProblems(early, 'standard-ia')).toEqual(['next-step-too-soon'])
+    expect(ruleEvents(early, 'standard-ia').some((e) => e.early)).toBe(false)
   })
 
   it('files that start on an IA shelf can move on at once (they just pay its minimum)', () => {
@@ -154,11 +171,12 @@ describe('rule problems (S3 refuses these rules)', () => {
     expect(ruleProblems(rule('receipts', [{ afterDays: 365, to: 'deep-archive' }], 366), 'standard-ia')).toEqual([])
   })
 
-  it('a refused rule does nothing in the simulation, and simulate reports why', () => {
-    const bad = rule('receipts', [{ afterDays: 10, to: 'standard-ia' }], 2555)
-    const r = simulate([bad], 84, { ...RECOMMENDED_CLASSES, receipts: 'standard' })
-    expect(r.ruleProblems.receipts).toEqual(['ia-too-soon'])
-    expect(r.total).toBeCloseTo(simulate([], 84, { ...RECOMMENDED_CLASSES, receipts: 'standard' }).total, 6)
+  it('a rejected rule does nothing in the simulation, and simulate reports why', () => {
+    const bad = rule('receipts', [{ afterDays: 30, to: 'glacier-ir' }, { afterDays: 60, to: 'deep-archive' }], 2555, 1)
+    const r = simulate([bad])
+    expect(r.ruleProblems.receipts).toEqual(['next-step-too-soon'])
+    expect(r.total).toBeCloseTo(simulate([]).total, 6)
+    expect(solved(simulate(withRule(solution, 'receipts', bad)))).toBe(false)
   })
 })
 
@@ -249,7 +267,8 @@ describe('rule events (the path shown on each card)', () => {
     expect(ev[3].early).toEqual({ cls: 'glacier-ir', stayed: 31, min: 90 })
   })
 
-  it('a refused rule shows only the start', () => {
-    expect(ruleEvents(rule('receipts', [{ afterDays: 5, to: 'standard-ia' }]), 'standard').map((e) => e.kind)).toEqual(['start'])
+  it('a rejected rule shows only the start', () => {
+    const bad = rule('receipts', [{ afterDays: 30, to: 'glacier-flexible' }, { afterDays: 60, to: 'deep-archive' }])
+    expect(ruleEvents(bad, 'standard').map((e) => e.kind)).toEqual(['start'])
   })
 })

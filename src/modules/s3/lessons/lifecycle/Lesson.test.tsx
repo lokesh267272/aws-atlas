@@ -2,13 +2,15 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { checkTextBudget, S3_LIMITS } from '../../../../test/textBudget'
 import { CLASSES } from '../../storageClasses'
-import { Calendar, START_RULES } from './Calendar'
+import { Calendar, START_RULES, monthAt } from './Calendar'
 import Lesson from './Lesson'
 import { emptyRule, solution, type Rule } from './lifecycleModel'
-import { PROBLEM_LABELS, RuleBuilder } from './RuleBuilder'
+import { PROBLEM_LABELS, RuleBuilder, daysFromText } from './RuleBuilder'
 import { terms } from './terms'
 
 const noop = () => {}
+/** Labels as React writes them into HTML (apostrophes become &#x27;). */
+const escapeHtml = (s: string) => renderToStaticMarkup(<>{s}</>)
 const builder = (rules: Rule[]) => renderToStaticMarkup(<RuleBuilder rules={rules} onChange={noop} />)
 const withReceipts = (patch: Partial<Rule>) => START_RULES.map((r) => (r.prefix === 'receipts' ? { ...r, ...patch } : r))
 
@@ -28,6 +30,13 @@ describe('lifecycle lesson', () => {
     expect(html.match(/data-explain=""/g)).toHaveLength(2)
     expect(html).toMatch(/filing clerk with a calendar/)
     expect(html).toMatch(/still pay for the whole minimum/)
+    expect(html).toMatch(/One rule also can&#x27;t move files off a shelf it moved them to until that minimum is up/)
+  })
+
+  it('no longer claims files must be 30 days old before an IA shelf (AWS dropped that in July 2026)', () => {
+    const text = renderToStaticMarkup(<Lesson />).replace(/<[^>]*>/g, ' ')
+    expect(text).not.toMatch(/30 days old/)
+    expect(Object.values(PROBLEM_LABELS).join(' ')).not.toMatch(/30 days old/)
   })
 
   it('labels prices as example prices and never states a price ratio', () => {
@@ -50,7 +59,7 @@ describe('rule builder', () => {
   it('has a card for every prefix, starting with no rules', () => {
     const html = builder(START_RULES)
     for (const p of ['menu/', 'receipts/', 'delivery/', 'backups/', 'reports/']) expect(html).toContain(`>${p}</code>`)
-    expect(html).not.toMatch(/refuses/)
+    expect(html).not.toMatch(/reject/)
   })
 
   it('offers every shelf in each move, with keyboard controls only', () => {
@@ -70,10 +79,37 @@ describe('rule builder', () => {
     expect(html).not.toMatch(/aria-label="menu\/: expire/)
   })
 
-  it('shows a refused rule and why, in one line', () => {
-    const html = builder(withReceipts({ transitions: [{ afterDays: 10, to: 'one-zone-ia' }] }))
-    expect(html).toMatch(/S3 refuses this rule, so it does nothing/)
-    expect(html).toContain(PROBLEM_LABELS['ia-too-soon'])
+  it('shows a rejected rule and why, in one line', () => {
+    const html = builder(
+      withReceipts({
+        transitions: [
+          { afterDays: 30, to: 'glacier-ir' },
+          { afterDays: 60, to: 'deep-archive' },
+        ],
+      }),
+    )
+    expect(html).toMatch(/S3 would reject this rule when you save it/)
+    expect(html).toContain(escapeHtml(PROBLEM_LABELS['next-step-too-soon']))
+    expect(PROBLEM_LABELS['next-step-too-soon']).toMatch(/minimum stay/)
+  })
+
+  it('accepts a move into Standard-IA or One Zone-IA from day 0', () => {
+    expect(builder(withReceipts({ transitions: [{ afterDays: 0, to: 'one-zone-ia' }] }))).not.toMatch(/reject/)
+  })
+
+  it('names the One Zone-IA to Glacier Instant Retrieval move it rejects', () => {
+    const html = builder(START_RULES.map((r) => (r.prefix === 'reports' ? { ...r, transitions: [{ afterDays: 60, to: 'glacier-ir' as const }] } : r)))
+    expect(html).toContain(escapeHtml(PROBLEM_LABELS['unsupported-move']))
+    expect(html).not.toContain(escapeHtml(PROBLEM_LABELS['not-down-the-waterfall']))
+  })
+
+  it('shows a days value below the minimum as the minimum while typing', () => {
+    expect(daysFromText('0', 1)).toBe(1)
+    expect(daysFromText('-5', 0)).toBe(0)
+    expect(daysFromText('99999', 0)).toBe(3650)
+    expect(daysFromText('45', 1)).toBe(45)
+    expect(daysFromText('', 1)).toBeNull()
+    expect(daysFromText('-', 1)).toBeUndefined()
   })
 
   it('flags deleting receipts before 7 years', () => {
@@ -89,6 +125,11 @@ describe('rule builder', () => {
     const html = builder(solution)
     expect(html).toMatch(/Day 2,555<\/span> hidden, old version/)
     expect(html).toMatch(/Day 2,556<\/span> deleted/)
+  })
+
+  it('says receipts are deleted after year 7, so the 7-year run never shows it (and only receipts)', () => {
+    const html = builder(solution)
+    expect(html.match(/Deleted after year 7, so the 7-year run never shows it/g)).toHaveLength(1)
   })
 
   it('every problem has a short one-line label', () => {
@@ -125,6 +166,18 @@ describe('calendar', () => {
 
   it('with no rules the estimate is over budget and the checks say so', () => {
     expect(html).toMatch(/these rules: \$80,628/)
-    expect(renderToStaticMarkup(<Calendar rules={[emptyRule('receipts')]} onRules={noop} />)).toMatch(/S3 accepts every rule/)
+    expect(renderToStaticMarkup(<Calendar rules={[emptyRule('receipts')]} onRules={noop} />)).toMatch(/S3 would accept every rule/)
+  })
+
+  it('names rules S3 would reject in the challenge checks', () => {
+    const bad: Rule = { ...emptyRule('receipts'), transitions: [{ afterDays: 30, to: 'glacier-ir' }, { afterDays: 60, to: 'deep-archive' }] }
+    expect(renderToStaticMarkup(<Calendar rules={[bad]} onRules={noop} />)).toMatch(/S3 would accept every rule \(rejected: receipts\/\)/)
+  })
+
+  it('never computes a month below 0, even if the first frame is a little early', () => {
+    expect(monthAt(-16)).toBe(0)
+    expect(monthAt(0)).toBe(0)
+    expect(monthAt(3500)).toBe(42)
+    expect(monthAt(7000)).toBe(84)
   })
 })

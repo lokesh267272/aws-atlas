@@ -6,19 +6,43 @@ import { Term } from '../../../../components/Term'
 import { cn } from '../../../../lib/cn'
 import { CLASSES, classById, type ClassId } from '../../storageClasses'
 import { FILE_TYPES, PREFIX_IDS, RECOMMENDED_CLASSES, type PrefixId } from '../../story'
-import { canMove, deletesTooEarly, ruleEvents, ruleProblems, type Rule, type RuleEvent, type RuleProblem, type Step } from './lifecycleModel'
+import {
+  DAYS_PER_MONTH,
+  SIM_MONTHS,
+  canMove,
+  deletesTooEarly,
+  emptyRule,
+  ruleEvents,
+  ruleProblems,
+  type Rule,
+  type RuleEvent,
+  type RuleProblem,
+  type Step,
+} from './lifecycleModel'
 import { shortName, whole } from './format'
 
 const MAX_MOVES = 3
 const MAX_DAYS = 3650
+/** Days the 7-year run covers (its years are 12 months of 30 days, so 2,520 days). */
+const RUN_DAYS = SIM_MONTHS * DAYS_PER_MONTH
 
-/** One line each, shown on the card when S3 would refuse the rule. */
+/** One line each, shown on the card when S3 would reject the rule. */
 export const PROBLEM_LABELS: Record<RuleProblem, string> = {
   'not-down-the-waterfall': "S3 can't make this move: rules only move files down the shelves",
+  'unsupported-move': "S3 can't move One Zone-IA files to Glacier Instant Retrieval",
   'days-not-increasing': 'Each move needs more days than the one before',
-  'ia-too-soon': 'Files must be 30 days old before Standard-IA or One Zone-IA',
-  'next-step-too-soon': 'Keep files 30 days on an IA shelf before moving on',
+  'next-step-too-soon': "Move on only after a shelf's minimum stay (30 or 90 days)",
   'expire-before-last-move': 'Expiry must come after the last move',
+}
+
+/**
+ * The days a field's text stands for, kept between `min` and the maximum.
+ * null = the field is empty; undefined = not a number (yet), such as a lone "-".
+ */
+export function daysFromText(text: string, min: number): number | null | undefined {
+  if (text.trim() === '') return null
+  const n = Math.round(Number(text))
+  return Number.isFinite(n) ? Math.min(MAX_DAYS, Math.max(min, n)) : undefined
 }
 
 /** How long Mealhop keeps each kind of file, in a few words. */
@@ -60,13 +84,15 @@ function DaysInput({
       aria-label={label}
       onChange={(e) => {
         const text = e.target.value
-        setDraft(text)
-        if (text.trim() === '') {
-          if (optional) onChange(null)
+        const days = daysFromText(text, min)
+        if (days === null || days === undefined) {
+          setDraft(text)
+          if (days === null && optional) onChange(null)
           return
         }
-        const n = Math.round(Number(text))
-        if (Number.isFinite(n)) onChange(Math.min(MAX_DAYS, Math.max(min, n)))
+        // Show the number the rule really uses: a value below the minimum (or above the maximum) never sits in the field.
+        setDraft(days === Number(text) ? text : String(days))
+        onChange(days)
       }}
       onBlur={() => setDraft(null)}
       className="h-9 w-20 rounded-md border border-line-strong bg-panel px-2 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-signal"
@@ -74,7 +100,10 @@ function DaysInput({
   )
 }
 
-/** A sensible next move: the first shelf further down (skipping Intelligent-Tiering), 90 days after the last move. */
+/**
+ * A sensible next move: the first shelf further down (skipping Intelligent-Tiering), 90 days after the last move.
+ * 90 days covers the minimum stay of every shelf that has a shelf below it, so S3 accepts it.
+ */
 function nextStep(rule: Rule, start: ClassId): Step {
   const last = rule.transitions[rule.transitions.length - 1]
   const from = last?.to ?? start
@@ -86,6 +115,9 @@ function nextStep(rule: Rule, start: ClassId): Step {
 function Path({ events, rule }: { events: RuleEvent[]; rule: Rule }) {
   const hidden = events.find((e) => e.kind === 'hide')
   const deleted = events.some((e) => e.kind === 'delete')
+  // Receipts kept 2,555 days (7 real years) expire after the run's 84 thirty-day months end.
+  const end = events.find((e) => e.kind === 'hide' || e.kind === 'delete')
+  const afterRun = end !== undefined && end.day >= RUN_DAYS
   return (
     <ol className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-xs text-ink-2" aria-label="What happens to one month of files">
       {events.map((e, i) => (
@@ -111,6 +143,11 @@ function Path({ events, rule }: { events: RuleEvent[]; rule: Rule }) {
         <li className="flex items-center gap-1">
           <ChevronRight aria-hidden className="size-3.5 shrink-0 text-ink-3" />
           <Pill tone="warn">old versions kept and billed forever</Pill>
+        </li>
+      )}
+      {afterRun && (
+        <li className="basis-full text-ink-3">
+          {deleted ? 'Deleted' : 'Hidden'} after year 7, so the 7-year run never shows it.
         </li>
       )}
       {rule.prefix === 'menu' && rule.noncurrentExpireAfterDays !== null && (
@@ -232,7 +269,7 @@ function RuleCard({ rule, onChange }: { rule: Rule; onChange: (r: Rule) => void 
         <ul className="mt-3 grid gap-1" aria-label={`Problems with the ${ft.prefix} rule`}>
           {problems.length > 0 && (
             <li>
-              <Pill tone="bad">S3 refuses this rule, so it does nothing</Pill>
+              <Pill tone="bad">S3 would reject this rule when you save it</Pill>
             </li>
           )}
           {problems.map((p) => (
@@ -253,7 +290,7 @@ function RuleCard({ rule, onChange }: { rule: Rule; onChange: (r: Rule) => void 
 
 /** One card per prefix: moves, expiry and old-version clean-up. */
 export function RuleBuilder({ rules, onChange }: { rules: Rule[]; onChange: (rules: Rule[]) => void }) {
-  const ruleFor = (p: PrefixId) => rules.find((r) => r.prefix === p) ?? { prefix: p, transitions: [], expireAfterDays: null, noncurrentExpireAfterDays: null }
+  const ruleFor = (p: PrefixId) => rules.find((r) => r.prefix === p) ?? emptyRule(p)
   const update = (next: Rule) =>
     onChange(rules.some((r) => r.prefix === next.prefix) ? rules.map((r) => (r.prefix === next.prefix ? next : r)) : [...rules, next])
   return (

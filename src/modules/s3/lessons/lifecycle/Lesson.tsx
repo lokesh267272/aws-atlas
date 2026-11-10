@@ -22,12 +22,12 @@ export default function Lesson() {
       <Section title="A rule for each kind of file">
         <Explain>
           <p>
-            A <Term k="lifecycle-rule">lifecycle rule</Term> works like a filing clerk with a calendar: after 30 days, move
-            these files to a cheaper shelf; after a year, archive them; after 7 years, throw them out. Each rule picks files by{' '}
-            <Term k="prefix">prefix</Term>, such as receipts/. <Term k="transition-action">Transition actions</Term> move
-            files down the shelves and <Term k="expiration-action">expiration actions</Term> delete them. With{' '}
-            <Term k="versioning">versioning</Term> on, an expired file just becomes an{' '}
-            <Term k="noncurrent-version">old version</Term>, so delete those too.
+            A <Term k="lifecycle-rule">lifecycle rule</Term> is a filing clerk with a calendar: after 30 days, move these
+            files to a cheaper shelf; after 7 years, throw them out. Each rule picks files by <Term k="prefix">prefix</Term>,
+            such as receipts/. Moves are <Term k="transition-action">transition actions</Term>; deletes are{' '}
+            <Term k="expiration-action">expiration actions</Term>. With <Term k="versioning">versioning</Term> on, expiring a
+            file only hides it and the old copy is still billed, so delete{' '}
+            <Term k="noncurrent-version">old versions</Term> too.
           </p>
         </Explain>
         <RuleBuilder rules={rules} onChange={setRules} />
@@ -38,9 +38,8 @@ export default function Lesson() {
           <p>
             Most cheaper shelves have a <Term k="minimum-storage-duration">minimum storage duration</Term>, from 30 to 180
             days. Move or delete a file sooner and you still pay for the whole minimum, like leaving a phone contract early.
-            Rules also can&apos;t move files to <Term k="s3-standard-ia">Standard-IA</Term> or{' '}
-            <Term k="s3-one-zone-ia">One Zone-IA</Term> until they&apos;re 30 days old. Each shelf shows its minimum, and
-            the bill shows early charges on their own line.
+            One rule also can&apos;t move files off a shelf it moved them to until that minimum is up. Each shelf shows its
+            minimum, and the bill shows early charges on their own line.
           </p>
         </Explain>
         <Calendar rules={rules} onRules={setRules} />
