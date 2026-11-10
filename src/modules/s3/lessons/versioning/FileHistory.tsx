@@ -9,6 +9,7 @@ import { ModeControl, PhotoTile, StackLegend, VersionStack } from './parts'
 import {
   BLANK,
   MENU_BEFORE,
+  MENU_START,
   current,
   del,
   deleteVersion,
@@ -23,11 +24,8 @@ import {
 
 const KEY = 'menu/biryani.jpg'
 
-/** One photo, stored before versioning was turned on, so its version ID is null. */
-const START_BUCKET: VBucket = {
-  mode: 'off',
-  objects: { [KEY]: [{ versionId: 'null', content: MENU_BEFORE[KEY], deleteMarker: false }] },
-}
+/** Just the biryani photo from the starting menu: stored before versioning was turned on, so its version ID is null. */
+const START_BUCKET: VBucket = { ...MENU_START, objects: { [KEY]: MENU_START.objects[KEY] } }
 
 type Action = 'upload' | 'blank' | 'delete' | 'restore' | 'remove-marker' | 'delete-version'
 

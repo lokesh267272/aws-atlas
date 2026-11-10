@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { checkTextBudget, S3_LIMITS } from '../../../../test/textBudget'
 import { FileHistory, historyMessage } from './FileHistory'
-import { GOAL, HINT, InternScript, MenuPreview, runMessage, SUCCESS_NOTE } from './InternScript'
+import { GOAL, HINT, InternScript, MenuPreview, SUCCESS_NOTE } from './InternScript'
+import { runMessage } from './internChallenge'
 import Lesson from './Lesson'
 import { ModeControl, VersionStack } from './parts'
 import { terms } from './terms'
@@ -125,7 +126,11 @@ describe('versioning lesson', () => {
 
   it('keeps challenge feedback to one sentence each, with the agreed hint', () => {
     const hint = textOf(renderToStaticMarkup(<>{HINT}</>))
-    expect(hint).toBe('Turn versioning on before the script runs (Reset first).')
+    // Helps both stuck paths: versioning was off, or it was on but the restore step is unclear.
+    expect(hint).toBe(
+      'Turn versioning on before the script runs (Reset first), then use Restore or Remove marker on each broken file.',
+    )
+    expect(sentences(hint)).toBe(1)
     expect(sentences(textOf(renderToStaticMarkup(<>{SUCCESS_NOTE}</>)))).toBe(1)
     expect(sentences(textOf(renderToStaticMarkup(<>{GOAL}</>)))).toBeLessThanOrEqual(1)
     expect(sentences(runMessage(runScript(MENU_START)))).toBe(1)
@@ -136,6 +141,13 @@ describe('versioning lesson', () => {
     const html = renderToStaticMarkup(<InternScript />)
     expect(radio(html, 'off')).toMatch(/checked/)
     expect(textOf(html).match(/as before/g)).toHaveLength(3)
+  })
+
+  it('offers Check the menu as the second main action, unavailable until the script has run', () => {
+    const html = renderToStaticMarkup(<InternScript />)
+    const check = /<button[^>]*>(?:(?!<\/button>)[\s\S])*Check the menu<\/button>/.exec(html)?.[0] ?? ''
+    expect(check).not.toBe('')
+    expect(check).toMatch(/aria-disabled="true"/)
   })
 
   it('ends with the file store at step 4', () => {

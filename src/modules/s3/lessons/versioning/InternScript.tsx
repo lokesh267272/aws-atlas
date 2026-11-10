@@ -1,29 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Info, Play, Terminal } from 'lucide-react'
+import { Info, Play, SearchCheck, Terminal } from 'lucide-react'
 import { useReducedMotion } from 'motion/react'
 import { Bench } from '../../../../components/lesson'
 import { Button, Pill } from '../../../../components/controls'
 import { Challenge, useChallenge } from '../../../../components/Challenge'
 import { Term } from '../../../../components/Term'
 import { s3Story } from '../../story'
-import { ModeControl, PhotoTile, StackLegend, VersionStack } from './parts'
 import {
-  BLANK,
-  INTERN_SCRIPT,
-  MENU_BEFORE,
-  MENU_KEYS,
-  MENU_START,
-  canRestore,
-  current,
-  fixAll,
-  menuMatches,
-  removeMarker,
-  restoreVersion,
-  runScript,
-  setMode,
-  type Mode,
-  type VBucket,
-} from './versioningModel'
+  SCRIPT_START,
+  isStale,
+  scriptStatus,
+  scriptStep,
+  showMeSteps,
+  staleReason,
+  type ScriptAction,
+  type ScriptState,
+} from './internChallenge'
+import { ModeControl, PhotoTile, StackLegend, VersionStack } from './parts'
+import { BLANK, INTERN_SCRIPT, MENU_BEFORE, MENU_KEYS, canRestore, current, type VBucket } from './versioningModel'
 
 /** Time between the Show me steps (Reset and turn on, run the script, restore). */
 const SHOW_STEP_MS = 900
@@ -31,7 +25,8 @@ const SHOW_STEP_MS = 900
 export const GOAL = 'Run the script, then make the menu look exactly as it did before'
 export const HINT = (
   <>
-    Turn <Term k="versioning">versioning</Term> on before the script runs (Reset first).
+    Turn <Term k="versioning">versioning</Term> on before the script runs (Reset first), then use Restore or Remove marker on
+    each broken file.
   </>
 )
 export const SUCCESS_NOTE = (
@@ -41,61 +36,6 @@ export const SUCCESS_NOTE = (
   </>
 )
 
-type ScriptEvent =
-  | { kind: 'mode'; mode: Mode }
-  | { kind: 'run' }
-  | { kind: 'restore' }
-  | { kind: 'remove-marker' }
-  | { kind: 'show-on' }
-  | { kind: 'show-run' }
-  | { kind: 'shown' }
-
-interface ScriptState {
-  bucket: VBucket
-  /** The script has run on this bucket since the last Reset. */
-  ran: boolean
-  last: ScriptEvent | null
-}
-
-const START: ScriptState = { bucket: MENU_START, ran: false, last: null }
-
-const lostFiles = (b: VBucket) => MENU_KEYS.filter((k) => !canRestore(b, k))
-const brokenFiles = (b: VBucket) => MENU_KEYS.filter((k) => current(b, k) !== MENU_BEFORE[k])
-
-/** What a run of the script did, in one sentence. */
-export function runMessage(b: VBucket): string {
-  if (lostFiles(b).length === 0) return 'Versioning kept the old copies, so restore each broken file below.'
-  if (b.mode === 'off') return 'Versioning was off, so those photos are gone for good: press Reset to try again.'
-  if (b.mode === 'suspended')
-    return 'With versioning suspended, the script replaced the null versions, so those photos are gone for good.'
-  return 'Some photos are gone for good: press Reset to try again.'
-}
-
-function statusText(s: ScriptState): string {
-  const { last, bucket } = s
-  if (!last) return 'The menu looks right, and versioning is off. Choose a setting, then run the script.'
-  switch (last.kind) {
-    case 'mode':
-      return last.mode === 'on'
-        ? 'Versioning on: the next overwrite or delete keeps the old copy.'
-        : 'Suspended: new writes will replace each photo’s null version.'
-    case 'run':
-      return runMessage(bucket)
-    case 'restore':
-    case 'remove-marker': {
-      const left = brokenFiles(bucket).length
-      if (left === 0) return 'Every photo is back, exactly as before.'
-      return `${last.kind === 'restore' ? 'Restored' : 'Marker removed'}: ${left === 1 ? '1 file' : `${left} files`} still to fix.`
-    }
-    case 'show-on':
-      return 'Show me: Reset, then turn versioning on before the script runs.'
-    case 'show-run':
-      return 'The script ran, but every old copy is kept.'
-    case 'shown':
-      return 'Restored the old biryani photo and removed both delete markers.'
-  }
-}
-
 /** One line per step of the intern's script. */
 const scriptLines = INTERN_SCRIPT.map((step) =>
   step.op === 'put' ? { verb: 'Overwrite', key: step.key, rest: `with a ${BLANK.toLowerCase()}` } : { verb: 'Delete', key: step.key, rest: '' },
@@ -104,7 +44,7 @@ const scriptLines = INTERN_SCRIPT.map((step) =>
 export function InternScript() {
   const reduce = useReducedMotion() === true
   const challenge = useChallenge()
-  const [s, setS] = useState<ScriptState>(START)
+  const [s, setS] = useState<ScriptState>(SCRIPT_START)
   const [showing, setShowing] = useState(false)
   const timers = useRef<number[]>([])
 
@@ -115,56 +55,43 @@ export function InternScript() {
   // Never leave Show me playing after the lesson closes.
   useEffect(() => clearTimers, [clearTimers])
 
-  const passing = s.ran && menuMatches(s.bucket)
-
-  const chooseMode = (m: Mode) => {
+  /** Every learner action goes through the pure step; its verdict drives the shared challenge progress. */
+  const send = (a: ScriptAction) => {
     if (showing) return
-    const bucket = setMode(s.bucket, m)
-    if (bucket !== s.bucket) setS({ ...s, bucket, last: { kind: 'mode', mode: m } })
+    const { state, verdict } = scriptStep(s, a)
+    setS(state)
+    if (verdict === 'fail') challenge.fail()
+    if (verdict === 'solve') challenge.solve()
   }
 
-  const run = () => {
-    if (showing) return
-    const bucket = runScript(s.bucket)
-    setS({ bucket, ran: true, last: { kind: 'run' } })
-    // A miss: this run destroyed a photo for good.
-    if (lostFiles(bucket).length > 0) challenge.fail()
-  }
-
-  const fix = (kind: 'restore' | 'remove-marker', bucket: VBucket) => {
-    if (showing) return
-    setS({ ...s, bucket, last: { kind } })
-    if (s.ran && menuMatches(bucket)) challenge.solve()
-  }
-
-  /** Reset puts the bucket back but keeps challenge progress: Reset is part of the answer, so it must not hide the hint. */
+  // Reset clears the bucket but keeps tries and the hint: Reset is part of the answer, so wiping tries would hide the Hint forever.
   const reset = () => {
     clearTimers()
     setShowing(false)
-    setS(START)
+    setS(scriptStep(s, { type: 'reset' }).state)
   }
 
   const showMe = () => {
     clearTimers()
-    const on = setMode(MENU_START, 'on')
-    const ran = runScript(on)
-    const fixed = fixAll(ran)
+    const [on, ran, fixed] = showMeSteps()
     if (reduce) {
-      setS({ bucket: fixed, ran: true, last: { kind: 'shown' } })
+      setS(fixed)
       challenge.show()
       return
     }
     setShowing(true)
-    setS({ bucket: on, ran: false, last: { kind: 'show-on' } })
+    setS(on)
     timers.current.push(
-      window.setTimeout(() => setS({ bucket: ran, ran: true, last: { kind: 'show-run' } }), SHOW_STEP_MS),
+      window.setTimeout(() => setS(ran), SHOW_STEP_MS),
       window.setTimeout(() => {
-        setS({ bucket: fixed, ran: true, last: { kind: 'shown' } })
+        setS(fixed)
         setShowing(false)
         challenge.show()
       }, 2 * SHOW_STEP_MS),
     )
   }
+
+  const canCheck = s.ran && !showing
 
   return (
     <Bench
@@ -179,7 +106,7 @@ export function InternScript() {
     >
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
-          <ModeControl mode={s.bucket.mode} onChange={chooseMode} disabled={showing} />
+          <ModeControl mode={s.bucket.mode} onChange={(mode) => send({ type: 'mode', mode })} disabled={showing} />
           <div className="min-w-0 rounded-md border border-line bg-paper px-3 py-2">
             <p className="flex items-center gap-1.5 text-sm font-bold text-ink-2">
               <Terminal aria-hidden className="size-4 text-ink-3" />
@@ -193,7 +120,13 @@ export function InternScript() {
               ))}
             </ol>
           </div>
-          <Button variant="primary" className="self-center" aria-disabled={showing} onClick={run}>
+          {/* Primary until the script has run; then Check the menu is the next step. */}
+          <Button
+            variant={s.ran ? 'secondary' : 'primary'}
+            className="self-center"
+            aria-disabled={showing}
+            onClick={() => send({ type: 'run' })}
+          >
             <Play aria-hidden />
             Run the script
           </Button>
@@ -201,7 +134,7 @@ export function InternScript() {
 
         <div className="flex items-start gap-2.5 rounded-md border border-line bg-paper px-3.5 py-3" aria-live="polite">
           <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-signal" />
-          <p className="text-ink-2">{statusText(s)}</p>
+          <p className="text-ink-2">{scriptStatus(s)}</p>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -210,15 +143,25 @@ export function InternScript() {
             bucket={s.bucket}
             ran={s.ran}
             disabled={showing}
-            onRestore={(key, id) => fix('restore', restoreVersion(s.bucket, key, id))}
-            onRemoveMarker={(key) => fix('remove-marker', removeMarker(s.bucket, key))}
+            onRestore={(key, versionId) => send({ type: 'restore', key, versionId })}
+            onRemoveMarker={(key) => send({ type: 'remove-marker', key })}
           />
           <StackLegend />
         </div>
 
+        <Button
+          variant={s.ran ? 'primary' : 'secondary'}
+          className="self-start"
+          aria-disabled={!canCheck}
+          onClick={() => canCheck && send({ type: 'check' })}
+        >
+          <SearchCheck aria-hidden />
+          Check the menu
+        </Button>
+
         <Challenge
-          stale={challenge.state.solved && !showing && !passing}
-          staleReason={s.ran ? 'failing' : 'changed'}
+          stale={isStale(challenge.state.solved, showing, s)}
+          staleReason={staleReason(s)}
           goal={GOAL}
           checks={[
             { label: 'The script has run', done: s.ran },

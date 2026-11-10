@@ -5,7 +5,7 @@ import { Button, Pill } from '../../../../components/controls'
 import { Term } from '../../../../components/Term'
 import { categories } from '../../../../course/categories'
 import { cn } from '../../../../lib/cn'
-import { BLANK, type Mode, type Version } from './versioningModel'
+import { BLANK, canSetMode, type Mode, type Version } from './versioningModel'
 
 /* ------------------------------------------------------------ Mode control */
 
@@ -14,9 +14,6 @@ const MODES: { value: Mode; label: string; description: string }[] = [
   { value: 'on', label: 'On', description: 'keep every version' },
   { value: 'suspended', label: 'Suspended', description: 'stop making new versions, keep the old ones' },
 ]
-
-/** Can the bucket switch to `m` from `mode`? Mirrors setMode: Off only before it was ever on; Suspended only after. */
-const allowed = (mode: Mode, m: Mode) => (m === 'off' ? mode === 'off' : m === 'suspended' ? mode !== 'off' : true)
 
 /** Off / On / Suspended, drawn like the shared Segmented control, with Off locked once versioning has been on. */
 export function ModeControl({
@@ -37,7 +34,7 @@ export function ModeControl({
         <div className="inline-flex max-w-full flex-wrap gap-1 rounded-md border border-line bg-sunken p-1">
           {MODES.map((opt) => {
             const checked = opt.value === mode
-            const off = disabled || !allowed(mode, opt.value)
+            const off = disabled || !canSetMode(mode, opt.value)
             return (
               <label
                 key={opt.value}

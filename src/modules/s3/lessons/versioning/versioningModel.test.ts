@@ -5,6 +5,7 @@ import {
   MENU_BEFORE,
   MENU_START,
   canRestore,
+  canSetMode,
   current,
   del,
   deleteVersion,
@@ -169,6 +170,19 @@ describe('versioning model: details', () => {
 
   it('suspend needs versioning to have been on first', () => {
     expect(setMode(MENU_START, 'suspended').mode).toBe('off')
+  })
+
+  it('canSetMode says which switches setMode allows', () => {
+    const modes = ['off', 'on', 'suspended'] as const
+    for (const from of modes) {
+      for (const to of modes) {
+        const b = from === 'off' ? MENU_START : setMode(on(), from)
+        expect(canSetMode(from, to)).toBe(setMode(b, to).mode === to)
+      }
+    }
+    expect(canSetMode('on', 'off')).toBe(false)
+    expect(canSetMode('off', 'suspended')).toBe(false)
+    expect(canSetMode('suspended', 'on')).toBe(true)
   })
 
   it('deleteVersion of the last version removes the key', () => {

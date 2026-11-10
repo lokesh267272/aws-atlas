@@ -67,11 +67,16 @@ function withVersions(b: VBucket, key: string, versions: Version[]): VBucket {
   return { ...b, objects }
 }
 
+/** Whether a bucket in mode `from` can switch to `to`: Off only while never versioned; Suspended only after On. */
+export function canSetMode(from: Mode, to: Mode): boolean {
+  if (to === 'off') return from === 'off'
+  if (to === 'suspended') return from !== 'off'
+  return true
+}
+
 /** Turn versioning on or suspend it. Off is ignored once the bucket has been on; suspend needs it to have been on. */
 export function setMode(b: VBucket, m: Mode): VBucket {
-  if (m === b.mode) return b
-  if (m === 'off') return b // only a never-versioned bucket is off
-  if (m === 'suspended' && b.mode === 'off') return b
+  if (m === b.mode || !canSetMode(b.mode, m)) return b
   return { ...b, mode: m }
 }
 
