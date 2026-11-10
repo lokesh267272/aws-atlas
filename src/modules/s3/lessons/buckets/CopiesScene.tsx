@@ -106,14 +106,15 @@ function Label({
 }: {
   position: [number, number, number]
   kind?: LabelKind
-  /** center: on the point; above: sits on top of it; above-left: up and to the left of it */
-  place?: 'center' | 'above' | 'above-left'
+  /** center: on the point; above: sits on top of it; above-left: up and to the left of it; below: hangs under it */
+  place?: 'center' | 'above' | 'above-left' | 'below'
   children: ReactNode
 }) {
   const shift = {
     center: '',
     above: '-translate-x-1/2 -translate-y-full',
     'above-left': '-translate-x-full -translate-y-full',
+    below: '-translate-x-1/2',
   }[place]
   const host = useLabelHost()
   return (
@@ -345,12 +346,12 @@ function AzPlatform({
   )
 }
 
-/** The tag over an AZ's devices: how many copies it holds, and whether a device broke. The AZ's own label says when it is out. */
+/** The tag over an AZ's devices: whether it holds copies, and whether a device broke. The AZ's own label says when it is out. */
 function copiesTag(where: Where, az: AzIndex, stored: boolean, breaks: Break[], narrow: boolean): { text: string; kind: LabelKind } | null {
   if (azOut(az, breaks) || !stored) return null
   if (!homeAzs(where).includes(az)) return narrow ? null : { text: 'no copy here', kind: 'dim' }
-  const n = copiesLeft(where, breaks)[az]
-  const copies = `${n} ${n === 1 ? 'copy' : 'copies'}`
+  // AWS doesn't say how many copies, so the tag says only that copies are there.
+  const copies = copiesLeft(where, breaks)[az] > 0 ? 'copies' : 'no copy'
   if (narrow) return { text: copies, kind: 'copy' }
   const broken = deviceBroken(az, breaks) ? ', 1 device broken' : ''
   return { text: where === 'ebs' ? `EBS volume: ${copies}${broken}` : `${copies}${broken}`, kind: 'copy' }
@@ -451,7 +452,8 @@ export default function CopiesScene({
         <meshLambertMaterial color={STORAGE} transparent opacity={stored && !canRead ? 0.35 : 1} toneMapped={false} />
         <Edges color={HEX.text} transparent opacity={0.9} />
       </mesh>
-      <Label position={[PHOTO.x, PHOTO.y + 0.12, PHOTO.z]} kind={stored && !canRead ? 'bad' : 'tag'} place="above">
+      {/* Under the photo, so it never covers the middle AZ's name label behind it */}
+      <Label position={[PHOTO.x, PHOTO.y - 0.12, PHOTO.z]} kind={stored && !canRead ? 'bad' : 'tag'} place="below">
         {photoLabel}
       </Label>
     </>

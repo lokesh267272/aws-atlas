@@ -10,7 +10,6 @@ import { s3Story } from '../../story'
 import { CopiesFallback } from './CopiesFallback'
 import {
   AZ_INDEXES,
-  COPIES_PER_AZ,
   EBS_AZ,
   azOut,
   copiesLeft,
@@ -33,15 +32,13 @@ const darkButton =
 const screenTerms =
   '[&_.term]:decoration-screen-accent [&_.term:hover]:text-screen-accent [&_.term[aria-expanded=true]]:text-screen-accent'
 
-const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
-
 /** What one AZ looks like now, for screen readers. */
 function describeAz(where: Where, az: AzIndex, stored: boolean, breaks: Break[]): string {
   const name = s3Story.azs[az]
   if (azOut(az, breaks)) return `${name} is out.`
   const broken = deviceBroken(az, breaks) ? '1 device broken, ' : ''
   if (!stored || !homeAzs(where).includes(az)) return `${name}: ${broken}no copy here.`
-  return `${name}: ${broken}${count(copiesLeft(where, breaks)[az], 'copy', 'copies')}.`
+  return `${name}: ${broken}${copiesLeft(where, breaks)[az] > 0 ? 'still has copies' : 'no copy left'}.`
 }
 
 /** What the stage shows, in words, for screen readers. */
@@ -50,8 +47,8 @@ export function describeCopies(where: Where, stored: boolean, breaks: Break[]): 
   const what = !stored
     ? 'No photo stored yet.'
     : where === 's3-standard'
-      ? 'The photo is stored in S3 Standard, with copies on two devices in every AZ.'
-      : `The photo is saved on an EBS volume, with copies on two devices in ${s3Story.azs[EBS_AZ]} only.`
+      ? 'The photo is stored in S3 Standard, with copies on devices in every AZ.'
+      : `The photo is saved on an EBS volume, with copies on devices in ${s3Story.azs[EBS_AZ]} only.`
   const serving = stored ? servingAz(where, breaks) : null
   const result = !stored ? '' : serving !== null ? `The photo loads from ${s3Story.azs[serving]}.` : "The photo can't be read."
   return [intro, what, ...AZ_INDEXES.map((az) => describeAz(where, az, stored, breaks)), result].filter(Boolean).join(' ')
@@ -60,15 +57,18 @@ export function describeCopies(where: Where, stored: boolean, breaks: Break[]): 
 /** One short line under the stage: what is stored, and whether the photo still loads. */
 export function statusLine(where: Where, stored: boolean, breaks: Break[]): string {
   if (!stored) return 'Nothing stored yet.'
-  const left = copiesLeft(where, breaks).reduce((a, b) => a + b, 0)
-  const total = homeAzs(where).length * COPIES_PER_AZ
+  const azsLeft = copiesLeft(where, breaks).filter((n) => n > 0).length
   const serving = servingAz(where, breaks)
   if (breaks.length === 0) {
     return where === 's3-standard'
       ? 'Stored: copies on devices in all 3 AZs.'
       : `Saved on one EBS volume: copies on devices in ${s3Story.azs[EBS_AZ]} only.`
   }
-  if (serving !== null) return `Still loads, from ${s3Story.azs[serving]}: ${left} of ${total} copies left.`
+  if (serving !== null) {
+    return where === 's3-standard'
+      ? `Still loads, from ${s3Story.azs[serving]}: copies remain in ${azsLeft} of 3 AZs.`
+      : `Still loads, from ${s3Story.azs[serving]}: other copies remain.`
+  }
   // Only a whole AZ going out stops reads (one broken device never does), so this is the volume's AZ being out.
   if (where === 'ebs') return `${s3Story.azs[EBS_AZ]} is out, so the EBS volume can't be read.`
   return 'Every AZ is out, so no copy is left to read in this Region.'
@@ -228,7 +228,7 @@ export function CopiesView() {
           <Term k="durability">durability</Term>
         </p>
         <p className="mt-1 text-screen-dim">
-          AWS&apos;s example: store 10,000,000 objects and expect to lose one about once every 10,000 years.
+          AWS&apos;s own example of what 11 nines means (a design goal, not a promise): store 10,000,000 objects and expect to lose one about once every 10,000 years.
         </p>
       </div>
 

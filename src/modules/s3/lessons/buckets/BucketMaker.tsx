@@ -35,6 +35,7 @@ const PROBLEM_TEXT: Record<NameProblem, string> = {
   'bad-edge': 'Start and end with a letter or number',
   'double-dot': 'No two dots in a row',
   'looks-like-ip': "Can't look like an IP address",
+  reserved: 'Uses a reserved prefix or suffix, like xn-- or -s3alias',
   taken: 'Taken: another AWS account owns it',
 }
 
