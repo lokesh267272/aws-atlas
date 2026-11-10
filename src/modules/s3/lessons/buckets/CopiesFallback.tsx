@@ -94,8 +94,7 @@ function DevicesSvg({ out, broken, holds }: { out: boolean; broken: boolean; hol
 function azNote(where: Where, az: AzIndex, stored: boolean, breaks: Break[]): string {
   if (!stored) return 'Nothing stored yet'
   if (!homeAzs(where).includes(az)) return 'No copy here'
-  const n = copiesLeft(where, breaks)[az]
-  const copies = n === 0 ? 'No copy left' : `${n} ${n === 1 ? 'copy' : 'copies'} left`
+  const copies = copiesLeft(where, breaks)[az] === 0 ? 'No copy left' : 'Copies left'
   return where === 'ebs' ? `EBS volume: ${copies.toLowerCase()}` : copies
 }
 

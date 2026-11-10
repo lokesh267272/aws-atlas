@@ -3,15 +3,19 @@ import { s3Story } from '../../story'
 /* ------------------------------------------------------------------ Bucket names */
 
 /** Why a bucket name can't be used. Order here is the order they are shown. */
-export type NameProblem = 'too-short' | 'too-long' | 'bad-chars' | 'bad-edge' | 'double-dot' | 'looks-like-ip' | 'taken'
+export type NameProblem = 'too-short' | 'too-long' | 'bad-chars' | 'bad-edge' | 'double-dot' | 'looks-like-ip' | 'reserved' | 'taken'
 
 /** Names another AWS account already owns in this story. Each one is otherwise a valid name. */
+/** Prefixes and suffixes AWS reserves, so no bucket name can start or end with them (checked against the AWS docs). */
+export const RESERVED_PREFIXES: string[] = ['xn--', 'sthree-', 'amzn-s3-demo-']
+export const RESERVED_SUFFIXES: string[] = ['-s3alias', '--ol-s3', '.mrap', '--x-s3', '--table-s3']
+
 export const TAKEN_NAMES: string[] = ['mealhop', 'mealhop-app', 'food-photos', 'photos', 'my-bucket', 'test-bucket']
 
 /**
  * The general purpose bucket naming rules, checked after trimming pasted spaces:
  * 3 to 63 characters; only lowercase letters, numbers, dots and hyphens; starts and ends with a letter or number;
- * no two dots in a row; not shaped like an IP address; and not already owned by anyone (names are global).
+ * no two dots in a row; not shaped like an IP address; no reserved prefix or suffix; and not already owned by anyone (names are global).
  * A name with another problem is never reported as taken.
  */
 export function bucketNameProblems(raw: string, taken: string[] = TAKEN_NAMES): NameProblem[] {
@@ -23,6 +27,7 @@ export function bucketNameProblems(raw: string, taken: string[] = TAKEN_NAMES): 
   if (/^[.-]|[.-]$/.test(name)) out.push('bad-edge')
   if (name.includes('..')) out.push('double-dot')
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name)) out.push('looks-like-ip')
+  if (RESERVED_PREFIXES.some((x) => name.startsWith(x)) || RESERVED_SUFFIXES.some((x) => name.endsWith(x))) out.push('reserved')
   if (out.length === 0 && taken.includes(name)) out.push('taken')
   return out
 }

@@ -43,6 +43,7 @@ describe('buckets lesson', () => {
     expect(html).toMatch(/99\.999999999% \(11 nines\)/)
     expect(html).toMatch(/10,000,000 objects/)
     expect(html).toMatch(/once every 10,000 years/)
+    expect(html).toMatch(/design goal, not a promise/)
   })
 
   it('falls back to the 2D picture without WebGL', () => {
@@ -69,7 +70,7 @@ describe('buckets lesson', () => {
   it('describes the scene for screen readers', () => {
     expect(describeCopies('s3-standard', false, [])).toMatch(/No photo stored yet/)
     expect(describeCopies('ebs', true, [{ kind: 'az', az: 0 }])).toMatch(/ap-south-1a is out.*can't be read/)
-    expect(describeCopies('s3-standard', true, [{ kind: 'device', az: 1 }])).toMatch(/ap-south-1b: 1 device broken, 1 copy\./)
+    expect(describeCopies('s3-standard', true, [{ kind: 'device', az: 1 }])).toMatch(/ap-south-1b: 1 device broken, still has copies\./)
   })
 
   it('the status line is one short sentence in every state', () => {
@@ -91,6 +92,18 @@ describe('buckets lesson', () => {
     expect(statusLine('s3-standard', true, [{ kind: 'az', az: 0 }])).toMatch(/Still loads/)
     // EBS keeps copies on several servers inside its AZ, so one broken device does not stop reads.
     expect(statusLine('ebs', true, [{ kind: 'device', az: 0 }])).toMatch(/Still loads/)
+  })
+
+  it('never states how many copies S3 or EBS keeps (AWS only says multiple)', () => {
+    const view = renderToStaticMarkup(<CopiesView />)
+    expect(view).not.toMatch(/two (copies|devices)|\d+ of [4-9] copies|\d copies/i)
+    for (const where of ['s3-standard', 'ebs'] as const)
+      for (const b of [[], [{ kind: 'device', az: 0 }], [{ kind: 'az', az: 0 }], [{ kind: 'device', az: 1 }, { kind: 'az', az: 2 }]] as Break[][]) {
+        expect(describeCopies(where, true, b)).not.toMatch(/(two|\d+) cop(y|ies)|two devices/i)
+        expect(statusLine(where, true, b)).not.toMatch(/\d+ of \d+ copies|\d+ cop(y|ies)/i)
+        expect(renderToStaticMarkup(<CopiesFallback where={where} stored breaks={b} label="" />)).not.toMatch(/\d+ cop(y|ies)/i)
+      }
+    expect(statusLine('s3-standard', true, [{ kind: 'az', az: 0 }])).toMatch(/copies remain in 2 of 3 AZs/)
   })
 
   it('offers two kinds of break only (a device, a whole AZ) and makes no data-center claims', () => {

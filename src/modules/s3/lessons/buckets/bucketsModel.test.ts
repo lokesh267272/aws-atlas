@@ -25,7 +25,11 @@ describe('bucket names', () => {
   it.each([
     ['', ['too-short']], ['ab', ['too-short']], ['a'.repeat(64), ['too-long']], ['Mealhop', ['bad-chars']], ['meal_hop', ['bad-chars']],
     ['meal hop', ['bad-chars']], ['mealhop-', ['bad-edge']], ['meal..hop', ['double-dot']], ['192.168.1.1', ['looks-like-ip']], ['mealhop', ['taken']],
+    ['xn--photos', ['reserved']], ['sthree-files', ['reserved']], ['amzn-s3-demo-bucket', ['reserved']], ['my-bucket-s3alias', ['reserved']],
+    ['data--ol-s3', ['reserved']], ['site.mrap', ['reserved']], ['data--x-s3', ['reserved']], ['data--table-s3', ['reserved']],
   ])('%s → %j', (name, problems) => { expect(bucketNameProblems(name)).toEqual(problems) })
+
+  it('reserved names are only reserved at the start or end', () => { expect(bucketNameProblems('my-xn--files')).toEqual([]); expect(bucketNameProblems('s3alias-files')).toEqual([]) })
 
   it('trims pasted spaces', () => { expect(bucketNameProblems('  mealhop-files-mumbai ')).toEqual([]) })
 
