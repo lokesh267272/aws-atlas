@@ -68,6 +68,13 @@ describe('s3 module skeleton', () => {
     expect(isInside(html, 'bucket', 'vpc')).toBe(false)
   })
 
+  it('draws the bucket across all three AZs and says what each step adds', () => {
+    const html = renderToStaticMarkup(<FileStoreDiagram step={3} />)
+    for (const az of s3Story.azs) expect(html).toContain(az)
+    expect(html).toMatch(/New in this step: a storage class/)
+    expect(html).toMatch(/aria-current="true"/)
+  })
+
   it('server role is outside the Region and appears from step 2', () => {
     expect(renderToStaticMarkup(<FileStoreDiagram step={1} />)).not.toContain('Server role')
     const html = renderToStaticMarkup(<FileStoreDiagram step={2} />)
@@ -88,7 +95,8 @@ describe('s3 module skeleton', () => {
 
   it('step 6 highlights nothing and reads complete', () => {
     const html = renderToStaticMarkup(<FileStoreDiagram step={6} />)
-    expect(html).not.toMatch(/bg-signal-soft/)
+    // Nothing highlighted: not a tile or pill, not an outlined or ringed Boundary, no aria-current.
+    expect(html).not.toMatch(/bg-signal-soft|outline-signal|ring-4|aria-current/)
     expect(html).toMatch(/Complete/)
   })
 
