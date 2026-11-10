@@ -6,7 +6,7 @@ import { Button, Pill, Readout } from '../../../../components/controls'
 import { Challenge, useChallenge } from '../../../../components/Challenge'
 import { Term } from '../../../../components/Term'
 import { cn } from '../../../../lib/cn'
-import { CLASSES, classById, EXAMPLE_PRICE_TAG, type ClassId, type StorageClass } from '../../storageClasses'
+import { CLASSES, classById, EXAMPLE_PRICE_TAG, waitPhrase, type ClassId } from '../../storageClasses'
 import { FILE_TYPES, PREFIX_IDS, s3Story, type PrefixId } from '../../story'
 import {
   MONTH_BUDGET,
@@ -40,8 +40,7 @@ const selectClass =
   'mt-1 h-10 w-full min-w-0 rounded-md border border-line-strong bg-panel px-2.5 text-sm text-ink hover:border-ink'
 
 /** How long a fetch from this shelf takes, in words. */
-const waitText = (c: StorageClass) =>
-  c.firstByteSeconds < 1 ? 'back in milliseconds' : c.id === 'deep-archive' ? 'a standard restore takes up to 12 hours' : 'a standard restore takes hours'
+const waitText = waitPhrase
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
@@ -459,7 +458,7 @@ export function Bill({ placement, finished }: { placement: Placement; finished: 
                   style={{ width: `${(l.minDuration / scale) * 100}%` }}
                 />
                 <span className="h-full bg-ink-3 motion-safe:transition-[width]" style={{ width: `${(l.fetch / scale) * 100}%` }} />
-                <span className="h-full bg-warn motion-safe:transition-[width]" style={{ width: `${(l.monitoring / scale) * 100}%` }} />
+                <span className="h-full bg-line-strong motion-safe:transition-[width]" style={{ width: `${(l.monitoring / scale) * 100}%` }} />
               </span>
               <span className="text-right text-sm font-bold tabular-nums text-ink">{money(lineTotal(l))}</span>
               <span className="col-span-3 text-xs text-ink-3">
@@ -493,7 +492,7 @@ export function Bill({ placement, finished }: { placement: Placement; finished: 
             <span aria-hidden className="size-3 rounded-[2px] bg-ink-3" /> fetch
           </li>
           <li className="flex items-center gap-1.5">
-            <span aria-hidden className="size-3 rounded-[2px] bg-warn" /> monitoring
+            <span aria-hidden className="size-3 rounded-[2px] bg-line-strong" /> monitoring
           </li>
         </ul>
       </div>

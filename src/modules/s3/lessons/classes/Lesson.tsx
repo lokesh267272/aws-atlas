@@ -21,7 +21,7 @@ export default function Lesson() {
             Think of a restaurant&apos;s storage: space at the front counter costs the most, the basement is cheaper, and a
             warehouse across town is cheapest but a slow trip away. <Term k="s3">S3</Term> has shelves like these, called{' '}
             <Term k="storage-class">storage classes</Term>. Shelves further back cost less each month, but charge a{' '}
-            <Term k="retrieval-fee">fee to fetch</Term> a file, or make you wait. One shelf even keeps it in a single{' '}
+            <Term k="retrieval-fee">fee to fetch</Term> a file, or make you wait. One shelf even keeps a file in just one{' '}
             <Term k="availability-zone">Availability Zone</Term>.
           </p>
         </Explain>

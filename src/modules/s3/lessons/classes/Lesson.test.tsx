@@ -55,7 +55,9 @@ describe('shelves', () => {
     const deep = renderToStaticMarkup(<ShelfReadouts id="deep-archive" />)
     expect(deep).toMatch(/\$0\.04/)
     expect(deep).toMatch(/\$0\.40/)
-    expect(deep).toMatch(/within 12 hours/)
+    expect(deep).toMatch(/Standard restore time/)
+    expect(deep).toMatch(/up to 12 hours/)
+    expect(deep).toMatch(/restore it first/)
     expect(deep).toMatch(/180 days/)
   })
 
@@ -63,6 +65,14 @@ describe('shelves', () => {
     const html = renderToStaticMarkup(<ShelfReadouts id="one-zone-ia" />)
     expect(html).toMatch(/>1</)
     expect(html).toMatch(/destroyed/)
+  })
+
+  it('says Intelligent-Tiering moves files by itself with no fetch fee', () => {
+    expect(renderToStaticMarkup(<ShelfReadouts id="intelligent-tiering" />)).toMatch(/by itself, and there is no fee to fetch/)
+  })
+
+  it('does not call Standard a restore', () => {
+    expect(renderToStaticMarkup(<ShelfReadouts id="standard" />)).not.toMatch(/restore/i)
   })
 
   it('says Intelligent-Tiering starts at the Standard price', () => {
