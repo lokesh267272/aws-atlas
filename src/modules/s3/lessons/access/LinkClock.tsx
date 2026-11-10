@@ -101,7 +101,7 @@ export function LinkClock() {
             <span>signed</span>
             <span>{fmtMinutes(span.max)}</span>
           </div>
-          {ROLE_LINK_MAX_MINUTES <= span.max && <p className="mt-1 text-xs text-ink-3">The bar ends at the 6-hour limit for links the servers sign</p>}
+          {ROLE_LINK_MAX_MINUTES <= span.max && <p className="mt-1 text-xs text-ink-3">Links the servers sign stop working at about the 6-hour mark, the usual life of their credentials</p>}
         </div>
 
         {/* Right: the link itself, the button to open it, and what happened each time */}
@@ -157,7 +157,7 @@ export function LinkClock() {
 
       <div className="mt-5 border-t border-line pt-4">
         <p className="text-sm text-ink-2">
-          Signed by the server <Term k="iam-role">role</Term>, so it lasts at most 6 hours, less if the role’s{' '}
+          Signed by the server <Term k="iam-role">role</Term>, so it lasts about 6 hours at most, less if the role’s{' '}
           <Term k="temporary-credentials">temporary credentials</Term> expire first.
         </p>
         {/* Plain text on purpose: a <Term> here would put role="button" next to "7 days". */}

@@ -20,10 +20,10 @@ export default function Lesson() {
         <Explain>
           <p>
             A new <Term k="bucket">bucket</Term> is like a locked room: every file starts private, and{' '}
-            <Term k="block-public-access">Block Public Access</Term> is on so nobody opens it to the world by mistake. You let people in on
-            purpose. {s3Story.appName}’s servers get a pass: an <Term k="identity-based-policy">IAM policy</Term> on their{' '}
-            <Term k="iam-role">role</Term> naming the files they may read. A <Term k="bucket-policy">bucket policy</Term> on the door can
-            allow or deny, and an <Term k="explicit-deny">explicit deny</Term> always wins.
+            <Term k="block-public-access">Block Public Access</Term> is on so nobody opens it to the world by mistake.{' '}
+            {s3Story.appName}’s servers get a pass, an <Term k="identity-based-policy">IAM policy</Term> on their{' '}
+            <Term k="iam-role">role</Term> that names the files they may read. A <Term k="bucket-policy">bucket policy</Term> on the door
+            can also allow or deny. If any rule says <Term k="explicit-deny">deny</Term>, that deny beats every allow.
           </p>
         </Explain>
         <GateBench />
@@ -33,9 +33,9 @@ export default function Lesson() {
         <Explain>
           <p>
             A <Term k="presigned-url">presigned URL</Term> is like a cinema ticket: whoever holds it gets into one film, and only until the
-            show is over. {s3Story.appName}’s servers sign each receipt link with their <Term k="iam-role">role</Term>, so the link works
-            only if the role can read that file. A link dies when the <Term k="temporary-credentials">temporary credentials</Term> that
-            signed it expire, so these links last at most 6 hours.
+            show is over. {s3Story.appName}’s servers make each receipt link using their <Term k="iam-role">role</Term>’s permissions, so it
+            works only if that role can read the file. The link also dies when the role’s{' '}
+            <Term k="temporary-credentials">temporary credentials</Term> expire, so these links last about 6 hours at most.
           </p>
         </Explain>
         <LinkClock />
