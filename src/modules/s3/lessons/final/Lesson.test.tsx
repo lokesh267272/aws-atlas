@@ -7,12 +7,22 @@ import Lesson from './Lesson'
 import { simulateYear, solution, START, type StoreConfig } from './finalModel'
 import { StoreSetup } from './StoreSetup'
 import { terms } from './terms'
+import { HINT, SUCCESS_NOTE } from './YearRun'
+
+/** True when `word` is shown as a glossary term (the Term trigger span). */
+const isTerm = (h: string, word: string) => new RegExp(`class="term"[^>]*>${word}</span>`).test(h)
 
 const noop = () => {}
 const html = renderToStaticMarkup(<Lesson />)
 const setup = (c: StoreConfig) => renderToStaticMarkup(<StoreSetup config={c} onChange={noop} />)
-/** Visible text; tags are dropped without adding spaces. */
-const text = (h: string) => h.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+/** Visible text; tags are dropped without adding spaces, and apostrophes decoded. */
+const text = (h: string) =>
+  h
+    .replace(/<[^>]*>/g, '')
+    .replace(/&#x27;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim()
 /** Every switch, in order: its visible label and whether it is on. */
 const switches = (h: string) =>
   (h.match(/<label[\s>][\s\S]*?<\/label>/g) ?? [])
@@ -61,8 +71,28 @@ describe('final lesson', () => {
 
   it('lists every event of the year, before it plays', () => {
     expect(html.match(/Month \d+: /g)).toHaveLength(7)
-    expect(text(html)).toMatch(/A fire destroys ap-south-1a/)
+    expect(text(html)).toMatch(/A fire destroys the AZ ap-south-1a/)
     expect(text(html)).not.toMatch(/Solved/)
+  })
+
+  it('the recap says rules move or clear out files, and what an AZ is', () => {
+    const recap = text(/<div data-explain=""[^>]*>([\s\S]*?)<\/div>/.exec(html)![1])
+    expect(recap).toMatch(/lifecycle rules move or clear out old files on time/)
+    expect(recap).toMatch(/3 or more AZs \(separate buildings\)/)
+  })
+
+  it('wraps the AWS words in the event list in glossary terms', () => {
+    expect(text(html)).toMatch(/A bot probes the bucket/)
+    const events = /<ol aria-label="The year, event by event"[\s\S]*?<\/ol>/.exec(html)![0]
+    expect(isTerm(events, 'bucket')).toBe(true)
+    expect(isTerm(events, 'AZ')).toBe(true)
+  })
+
+  it('wraps the AWS words in the hint and the success note', () => {
+    const note = renderToStaticMarkup(<>{SUCCESS_NOTE}</>)
+    for (const w of ['bucket', 'versioning', 'rules']) expect(isTerm(note, w), w).toBe(true)
+    const hint = renderToStaticMarkup(<>{HINT}</>)
+    for (const w of ['Block Public Access', 'role', 'prefixes', 'links', 'versioning', 'expire', 'old versions']) expect(isTerm(hint, w), w).toBe(true)
   })
 })
 
@@ -120,16 +150,29 @@ describe('store setup', () => {
 
   it('a rule S3 would reject says so, with lesson 5 reasons', () => {
     const h = setup({ ...solution, placement: { ...solution.placement, receipts: 'deep-archive' } })
-    expect(h).toMatch(/S3 would reject this rule, so the year runs without it/)
+    expect(text(h)).toMatch(/S3 would reject this rule, so the year runs without it/)
+    const pill = /S3<\/span> would reject[\s\S]*?runs without it/.exec(h)?.[0] ?? ''
+    expect(isTerm(h, 'S3')).toBe(true)
+    expect(isTerm(pill, 'rule')).toBe(true)
     expect(h).toMatch(/only move files down the shelves/)
   })
 
-  it('warns when a shelf keeps files in one AZ only', () => {
-    expect(setup(solution).match(/Stored in one AZ only/g)).toHaveLength(1)
+  it('warns when a shelf keeps files in one AZ only, with AZ as a glossary term', () => {
+    const h = setup(solution)
+    expect(text(h).match(/Stored in one AZ only/g)).toHaveLength(1)
+    expect(isTerm(h, 'AZ')).toBe(true)
   })
 
-  it('a public policy is shown as ignored while Block Public Access is on', () => {
-    expect(setup({ ...START, access: { ...START.access, publicRead: true } })).toMatch(/Ignored while Block Public Access is on/)
+  it('the versioning note wraps its AWS words', () => {
+    const note = /Off is the default\.[\s\S]*?can only be suspended\./.exec(setup(START))?.[0] ?? ''
+    expect(text(note)).toMatch(/Once on, a real bucket's versioning can only be suspended/)
+    for (const w of ['old version', 'bucket', 'versioning']) expect(isTerm(note, w), w).toBe(true)
+  })
+
+  it('a public policy is shown as ignored while Block Public Access is on (as a term)', () => {
+    const h = setup({ ...START, access: { ...START.access, publicRead: true } })
+    expect(text(h)).toMatch(/Ignored while Block Public Access is on/)
+    expect(/Ignored while <span[^>]*class="term"[^>]*>Block Public Access<\/span> is on/.test(h)).toBe(true)
   })
 
   it('keeps glossary terms out of every label', () => {
@@ -146,6 +189,10 @@ describe('log lines', () => {
     { ...solution, access: { ...solution.access, publicRead: true, blockPublicAccess: false } },
     { ...solution, placement: { ...solution.placement, menu: 'one-zone-ia', receipts: 'deep-archive', delivery: 'deep-archive' } },
     { ...solution, rules: [] },
+    {
+      ...solution,
+      rules: [...solution.rules, { prefix: 'reports', transitions: [{ afterDays: 90, to: 'glacier-flexible' }], expireAfterDays: null, noncurrentExpireAfterDays: null }],
+    },
   ]
 
   it('each is one short clause: at most 25 words, no sentence break', () => {
@@ -160,5 +207,11 @@ describe('log lines', () => {
     for (const c of configs)
       for (const l of simulateYear(c).log) expect(l.text, l.text).not.toMatch(/(Flexible Retrieval|Deep Archive)[^,:]* in milliseconds/)
     expect(simulateYear(solution).log.find((l) => l.kind === 'receipts-5-years')!.text).toMatch(/restored from S3 Glacier Deep Archive/)
+  })
+
+  it('every restore time it states is a standard restore (faster ones exist)', () => {
+    const lines = configs.flatMap((c) => simulateYear(c).log.map((l) => l.text)).filter((t) => /restore takes/.test(t))
+    expect(lines.filter((t) => /, not a minute$/.test(t))).toHaveLength(2)
+    for (const t of lines) expect(t, t).toMatch(/standard restore takes/)
   })
 })

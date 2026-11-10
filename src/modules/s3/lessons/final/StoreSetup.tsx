@@ -63,14 +63,16 @@ function AccessPanel({ c, set }: { c: StoreConfig; set: (next: Partial<StoreConf
       <div>
         <Switch label="Block all public access" checked={a.blockPublicAccess} onChange={(v) => update({ blockPublicAccess: v })} />
         <p className={cn(note, 'mt-1')}>
-          <Term k="block-public-access">Block Public Access</Term> is on for every new bucket
+          <Term k="block-public-access">Block Public Access</Term> is on for every new <Term k="bucket">bucket</Term>
         </p>
       </div>
       <div>
         <Switch label="Make public" checked={a.publicRead} onChange={(v) => update({ publicRead: v })} />
         <p className={cn(note, 'mt-1')}>
           {a.publicRead && a.blockPublicAccess ? (
-            <span className="font-bold text-warn">Ignored while Block Public Access is on</span>
+            <span className="font-bold text-warn">
+              Ignored while <Term k="block-public-access">Block Public Access</Term> is on
+            </span>
           ) : (
             <>
               A <Term k="bucket-policy">bucket policy</Term> letting anyone read and list every file
@@ -94,7 +96,8 @@ function AccessPanel({ c, set }: { c: StoreConfig; set: (next: Partial<StoreConf
           onChange={(v) => update({ link: v ? { ...RECEIPT_LINK } : null })}
         />
         <p className={cn(note, 'mt-1')}>
-          A <Term k="presigned-url">presigned link</Term> for one customer&apos;s receipt, signed with the role, lasts{' '}
+          A <Term k="presigned-url">presigned link</Term> for one customer&apos;s receipt, signed with the{' '}
+          <Term k="iam-role">role</Term>, lasts{' '}
           {RECEIPT_LINK.minutes / 60} hour
         </p>
       </div>
@@ -119,8 +122,8 @@ function VersioningPanel({ c, set }: { c: StoreConfig; set: (next: Partial<Store
         onChange={(v) => set({ versioning: v })}
       />
       <p className={note}>
-        Off is the default. On keeps every old version, and you pay for each one; once on, a real bucket can only be
-        suspended.
+        Off is the default. On keeps every <Term k="noncurrent-version">old version</Term>, and you pay for each one. Once on,
+        a real <Term k="bucket">bucket</Term>&apos;s <Term k="versioning">versioning</Term> can only be suspended.
       </p>
     </Panel>
   )
@@ -240,12 +243,19 @@ function FileCard({
             </option>
           ))}
         </select>
-        {classById(shelf).azs === 1 && <p className="mt-1 text-xs font-bold text-warn">Stored in one AZ only</p>}
+        {classById(shelf).azs === 1 && (
+          <p className="mt-1 text-xs font-bold text-warn">
+            Stored in one <Term k="availability-zone">AZ</Term> only
+          </p>
+        )}
       </div>
 
       <div className="mt-3 grid gap-2 border-t border-line pt-2.5">
         {menu ? (
-          <p className={note}>Read all day, so they stay on their shelf; only old versions can be cleaned up.</p>
+          <p className={note}>
+            Read all day, so they stay on their shelf; only <Term k="noncurrent-version">old versions</Term> can be cleaned
+            up.
+          </p>
         ) : (
           <div>
             <p className="text-xs font-bold text-ink-2">
@@ -301,7 +311,11 @@ function FileCard({
         {problems.length > 0 && (
           <ul className="grid gap-1" aria-label={`Problems with the ${ft.prefix} rule`}>
             <li>
-              <Pill tone="bad">S3 would reject this rule, so the year runs without it</Pill>
+              <Pill tone="bad" className="whitespace-normal">
+                <span>
+                  <Term k="s3">S3</Term> would reject this <Term k="lifecycle-rule">rule</Term>, so the year runs without it
+                </span>
+              </Pill>
             </li>
             {problems.map((p) => (
               <li key={p} className="text-sm text-bad">

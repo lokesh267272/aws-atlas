@@ -17,12 +17,13 @@ export default function Lesson() {
       <Section title="One bucket, one whole year">
         <Explain>
           <p>
-            Think of the <Term k="bucket">bucket</Term> as a shop&apos;s storeroom with a guard for each risk.{' '}
+            The <Term k="bucket">bucket</Term> is a shop&apos;s storeroom with a guard for each risk.{' '}
             <Term k="block-public-access">Block Public Access</Term> keeps strangers out, the server&apos;s{' '}
             <Term k="iam-role">role</Term> lets the app in, and a <Term k="presigned-url">presigned link</Term> lets one
             customer get one receipt. <Term k="storage-class">Storage classes</Term> keep costs down, and files you can&apos;t
-            re-make need copies in 3 or more <Term k="availability-zone">AZs</Term>. <Term k="versioning">Versioning</Term>{' '}
-            undoes a bad delete, and <Term k="lifecycle-rule">lifecycle rules</Term> clear out old files on time.
+            re-make need copies in 3 or more <Term k="availability-zone">AZs</Term> (separate buildings).{' '}
+            <Term k="versioning">Versioning</Term> undoes a bad delete, and <Term k="lifecycle-rule">lifecycle rules</Term> move
+            or clear out old files on time.
           </p>
         </Explain>
         <YearRun />

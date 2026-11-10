@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useReducedMotion } from 'motion/react'
 import { Bot, Calculator, Check, FileChartColumn, Flame, Play, Receipt, Tag, Terminal, TrendingUp, X, type LucideIcon } from 'lucide-react'
 import { Challenge, useChallenge } from '../../../../components/Challenge'
@@ -16,15 +16,50 @@ import { StoreSetup } from './StoreSetup'
 /** Time each month stays on screen while the year plays. */
 const STEP_MS = 550
 
-const EVENT: Record<YearEventKind, { icon: LucideIcon; title: string }> = {
+const EVENT: Record<YearEventKind, { icon: LucideIcon; title: ReactNode }> = {
   'intern-script': { icon: Terminal, title: "The intern's script overwrites and deletes menu photos" },
   'receipt-last-month': { icon: Receipt, title: "Customer #1042 wants last month's receipt within a minute" },
-  'bot-probe': { icon: Bot, title: 'A bot probes the bucket' },
+  'bot-probe': {
+    icon: Bot,
+    title: (
+      <>
+        A bot probes the <Term k="bucket">bucket</Term>
+      </>
+    ),
+  },
   'reports-reopened': { icon: FileChartColumn, title: "A manager re-opens last year's reports" },
   'receipts-5-years': { icon: Calculator, title: 'The accountant asks for 5-year-old receipts, within 2 days' },
   'busy-month': { icon: TrendingUp, title: `A busy month: ${BUSY_FACTOR} times the usual traffic` },
-  'az-destroyed': { icon: Flame, title: `A fire destroys ${s3Story.azs[ONE_ZONE_AZ]}` },
+  'az-destroyed': {
+    icon: Flame,
+    title: (
+      <>
+        A fire destroys the <Term k="availability-zone">AZ</Term> {s3Story.azs[ONE_ZONE_AZ]}
+      </>
+    ),
+  },
 }
+
+export const HINT = (
+  <>
+    Keep <Term k="block-public-access">Block Public Access</Term> on, let the server <Term k="iam-role">role</Term> read both{' '}
+    <Term k="prefix">prefixes</Term> and sign receipt <Term k="presigned-url">links</Term>, and turn{' '}
+    <Term k="versioning">versioning</Term> on. Then keep menu photos on <Term k="s3-standard">S3 Standard</Term> and reports on{' '}
+    <Term k="s3-one-zone-ia">One Zone-IA</Term>, put the rest on <Term k="s3-standard-ia">Standard-IA</Term>, move receipts to{' '}
+    <Term k="s3-glacier-instant-retrieval">Glacier Instant Retrieval</Term> at 30 days and{' '}
+    <Term k="s3-glacier-deep-archive">Deep Archive</Term> at a year, <Term k="expiration-action">expire</Term> delivery
+    photos and backups at 30 days, and delete <Term k="noncurrent-version">old versions</Term> after 1 day (menu photos after
+    30).
+  </>
+)
+
+export const SUCCESS_NOTE = (
+  <>
+    Every piece did its job: the <Term k="bucket">bucket</Term> stayed private, <Term k="versioning">versioning</Term> undid
+    the intern, files that can&apos;t be re-made survived the fire, and <Term k="lifecycle-rule">rules</Term> kept the bill
+    down.
+  </>
+)
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
@@ -151,25 +186,16 @@ export function YearRun() {
           { label: after(result.lost === 0, 'No files lost', `${result.lost} lost`), done: finished && result.lost === 0 },
           { label: after(result.leaked === 0, 'No files leaked', `${result.leaked} leaked`), done: finished && result.leaked === 0 },
           { label: after(result.late === 0, 'Every request on time', `${result.late} late`), done: finished && result.late === 0 },
-          { label: `Year bill ${dollars(YEAR_BUDGET)} or less (this setup: ${dollars(result.cost)})`, done: under },
+          // Like the other three, ticked only by a run; before one, the label shows this setup's estimate.
+          { label: `Year bill ${dollars(YEAR_BUDGET)} or less (this setup: ${dollars(result.cost)})`, done: finished && under },
         ]}
         state={challenge.state}
         stale={challenge.state.solved && !running && !(finished && result.solved)}
         staleReason={finished && !result.solved ? 'failing' : 'changed'}
-        hint={
-          <>
-            Block public access, let the server <Term k="iam-role">role</Term> read both prefixes and sign receipt links, and
-            turn <Term k="versioning">versioning</Term> on. Then keep menu photos on <Term k="s3-standard">S3 Standard</Term>{' '}
-            and reports on <Term k="s3-one-zone-ia">One Zone-IA</Term>, put the rest on{' '}
-            <Term k="s3-standard-ia">Standard-IA</Term>, move receipts to{' '}
-            <Term k="s3-glacier-instant-retrieval">Glacier Instant Retrieval</Term> at 30 days and{' '}
-            <Term k="s3-glacier-deep-archive">Deep Archive</Term> at a year, expire delivery photos and backups at 30 days, and
-            delete <Term k="noncurrent-version">old versions</Term> after 1 day (menu photos after 30).
-          </>
-        }
+        hint={HINT}
         onHint={challenge.hint}
         onShowMe={showMe}
-        successNote="Every piece did its job: the bucket stayed private, versioning undid the intern, files that can't be re-made survived the fire, and rules kept the bill down."
+        successNote={SUCCESS_NOTE}
       />
 
       <div className="mt-5">

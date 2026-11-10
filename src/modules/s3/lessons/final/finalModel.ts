@@ -148,8 +148,11 @@ export function classAt(rule: Rule | undefined, start: ClassId, ageDays: number)
 const shelf = (id: ClassId) => classById(id).name
 const prefixOf = (p: PrefixId) => FILE_TYPES[p].prefix
 const list = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`)
-/** "S3 Glacier Deep Archive, where a restore takes up to 12 hours" (archive classes are restored, not read). */
-const slowText = (id: ClassId) => `${shelf(id)}, where a restore takes ${classById(id).firstByteLabel}`
+/**
+ * "S3 Glacier Deep Archive, where a standard restore takes up to 12 hours". Archive classes are restored, not read,
+ * and the labels are for a standard restore: faster (expedited) restores exist, so say "standard".
+ */
+const slowText = (id: ClassId) => `${shelf(id)}, where a standard restore takes ${classById(id).firstByteLabel}`
 
 /* --------------------------------------------------------- Read all day */
 
@@ -272,7 +275,7 @@ export function simulateYear(c: StoreConfig): YearResult {
             { late: 1 },
           )
         if (classById(cls).firstByteSeconds > RECEIPT_DEADLINE_SECONDS)
-          return line(e, `Last month's receipt is on ${slowText(cls)}, but the customer wanted it within a minute`, { late: 1 })
+          return line(e, `Last month's receipt is on ${slowText(cls)}, not a minute`, { late: 1 })
         if (d.reason === 'public') return line(e, "Customer #1042 got last month's receipt, but only because the whole bucket is public")
         return line(e, `Customer #1042 got last month's receipt through a link, from ${shelf(cls)} in milliseconds`)
       }
@@ -288,7 +291,7 @@ export function simulateYear(c: StoreConfig): YearResult {
         if (!cls) return line(e, "Last year's reports were deleted, and re-making them takes longer than a minute", { late: 1 })
         extra.push({ month: e.month, prefix: 'reports', fee: OLD_REPORTS_GB * classById(cls).fetchPerGb })
         if (classById(cls).firstByteSeconds > REPORTS_DEADLINE_SECONDS)
-          return line(e, `Last year's reports are on ${slowText(cls)}, but the manager wanted them within a minute`, { late: 1 })
+          return line(e, `Last year's reports are on ${slowText(cls)}, not a minute`, { late: 1 })
         return line(e, `A manager re-opened last year's reports from ${shelf(cls)} in milliseconds`)
       }
 
