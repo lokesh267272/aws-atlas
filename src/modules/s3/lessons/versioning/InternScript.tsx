@@ -22,7 +22,7 @@ import { BLANK, INTERN_SCRIPT, MENU_BEFORE, MENU_KEYS, canRestore, current, type
 /** Time between the Show me steps (Reset and turn on, run the script, restore). */
 const SHOW_STEP_MS = 900
 
-export const GOAL = 'Run the script, then make the menu look exactly as it did before'
+export const GOAL = 'Run the script, then restore all three photos so the menu matches how it looked before'
 export const HINT = (
   <>
     Turn <Term k="versioning">versioning</Term> on before the script runs (Reset first), then use Restore or Remove marker on
@@ -98,8 +98,8 @@ export function InternScript() {
       title="Try it: undo the intern's bad script"
       intro={
         <>
-          Pick a <Term k="versioning">versioning</Term> setting, run the intern&apos;s script, then put every menu photo back
-          exactly as it was.
+          Pick a <Term k="versioning">versioning</Term> setting, run the script that blanks one photo and deletes two, then
+          restore all three photos.
         </>
       }
       onReset={reset}

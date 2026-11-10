@@ -31,7 +31,7 @@ export default function Lesson() {
         <InternScript />
         <Callout kind="real-aws">
           <p>
-            <Term k="object-lock">S3 Object Lock</Term> can stop anyone deleting a version for a set time, and{' '}
+            <Term k="object-lock">S3 Object Lock</Term> can block deleting a version for a set time (in compliance mode, not even the root user can), and{' '}
             <Term k="mfa-delete">MFA delete</Term> asks for a code before a version is deleted for good or versioning is changed.
           </p>
         </Callout>

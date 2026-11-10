@@ -49,12 +49,12 @@ export function historyMessage(last: HistoryEvent | null): string {
     case 'mode':
       return last.mode === 'on'
         ? 'Versioning on. Anything saved earlier keeps the version ID null.'
-        : 'Suspended: older versions stay, but new uploads and deletes replace the null version.'
+        : 'Suspended: older versions stay, but new uploads and deletes use the version ID null.'
     case 'upload':
     case 'blank':
       if (last.mode === 'off')
         return last.hadFile ? 'Versioning off: the old image was replaced and is gone for good.' : 'Uploaded as the only copy, version ID null.'
-      if (last.mode === 'suspended') return 'Saved as the null version, replacing any older null version. Other versions stay.'
+      if (last.mode === 'suspended') return 'Saved with version ID null, replacing any earlier null copy. Other versions stay.'
       return last.kind === 'blank'
         ? 'Oops, a blank image is now current, but the real photo is kept underneath.'
         : 'New version on top. The old photo is kept underneath.'
@@ -64,7 +64,7 @@ export function historyMessage(last: HistoryEvent | null): string {
       return 'A delete marker now hides the file. Older versions are kept, so you can undo it.'
     case 'restore':
       return last.mode === 'suspended'
-        ? 'Copied back on top as the null version, replacing any older null version.'
+        ? 'Copied back on top with version ID null, replacing any earlier null copy.'
         : 'That version was copied back on top as a new version, so it is current again.'
     case 'remove-marker':
       return 'Marker removed: the newest version under it shows again.'
@@ -175,7 +175,7 @@ export function FileHistory() {
 
         <div className="flex flex-col gap-2 border-t border-line pt-3">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Readout label="Photo versions stored" value={versions} hint="you pay for each one; lesson 5 cleans old ones up" />
+            <Readout label="Photo versions stored" value={versions} hint="you pay for each photo version (markers take almost no space); lesson 5 cleans old ones up" />
             <Readout
               label={`Bill for ${gb} GB of menu photos`}
               value={`${money(versions * gb * standard.storePerGbMonth)} a month`}
