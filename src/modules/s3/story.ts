@@ -3,6 +3,9 @@ import type { ClassId } from './storageClasses'
 /** One source for the app name and Region: Module 2's story. */
 export { story as s3Story } from '../ec2/story'
 
+/** A fixed example bucket name, the same for every learner. */
+export const BUCKET_NAME = 'mealhop-files'
+
 export type PrefixId = 'menu' | 'receipts' | 'delivery' | 'backups' | 'reports'
 export const PREFIX_IDS: PrefixId[] = ['menu', 'receipts', 'delivery', 'backups', 'reports']
 

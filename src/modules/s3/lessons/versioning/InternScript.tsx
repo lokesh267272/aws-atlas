@@ -105,6 +105,28 @@ export function InternScript() {
       onReset={reset}
     >
       <div className="flex flex-col gap-4">
+        <Challenge
+          stale={isStale(challenge.state.solved, showing, s)}
+          staleReason={staleReason(s)}
+          goal={GOAL}
+          checks={[
+            { label: 'The script has run', done: s.ran },
+            ...MENU_KEYS.map((key) => ({
+              label: (
+                <>
+                  <code className="font-mono text-xs">{key}</code> shows its photo again
+                </>
+              ),
+              done: s.ran && current(s.bucket, key) === MENU_BEFORE[key],
+            })),
+          ]}
+          state={challenge.state}
+          hint={HINT}
+          onHint={challenge.hint}
+          onShowMe={showMe}
+          successNote={SUCCESS_NOTE}
+        />
+
         <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
           <ModeControl mode={s.bucket.mode} onChange={(mode) => send({ type: 'mode', mode })} disabled={showing} />
           <div className="min-w-0 rounded-md border border-line bg-paper px-3 py-2">
@@ -158,28 +180,6 @@ export function InternScript() {
           <SearchCheck aria-hidden />
           Check the menu
         </Button>
-
-        <Challenge
-          stale={isStale(challenge.state.solved, showing, s)}
-          staleReason={staleReason(s)}
-          goal={GOAL}
-          checks={[
-            { label: 'The script has run', done: s.ran },
-            ...MENU_KEYS.map((key) => ({
-              label: (
-                <>
-                  <code className="font-mono text-xs">{key}</code> shows its photo again
-                </>
-              ),
-              done: s.ran && current(s.bucket, key) === MENU_BEFORE[key],
-            })),
-          ]}
-          state={challenge.state}
-          hint={HINT}
-          onHint={challenge.hint}
-          onShowMe={showMe}
-          successNote={SUCCESS_NOTE}
-        />
       </div>
     </Bench>
   )

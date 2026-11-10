@@ -13,6 +13,7 @@ import { HINT, SUCCESS_NOTE } from './YearRun'
 const isTerm = (h: string, word: string) => new RegExp(`class="term"[^>]*>${word}</span>`).test(h)
 
 const noop = () => {}
+const ruleFor = (c: StoreConfig, p: string) => c.rules.find((r) => r.prefix === p)!
 const html = renderToStaticMarkup(<Lesson />)
 const setup = (c: StoreConfig) => renderToStaticMarkup(<StoreSetup config={c} onChange={noop} />)
 /** Visible text; tags are dropped without adding spaces, and apostrophes decoded. */
@@ -78,7 +79,7 @@ describe('final lesson', () => {
   it('the recap says rules move or clear out files, and what an AZ is', () => {
     const recap = text(/<div data-explain=""[^>]*>([\s\S]*?)<\/div>/.exec(html)![1])
     expect(recap).toMatch(/lifecycle rules move or clear out old files on time/)
-    expect(recap).toMatch(/3 or more AZs \(separate buildings\)/)
+    expect(recap).toMatch(/3 or more AZs \(separate sites\)/)
   })
 
   it('wraps the AWS words in the event list in glossary terms', () => {
@@ -92,7 +93,8 @@ describe('final lesson', () => {
     const note = renderToStaticMarkup(<>{SUCCESS_NOTE}</>)
     for (const w of ['bucket', 'versioning', 'rules']) expect(isTerm(note, w), w).toBe(true)
     const hint = renderToStaticMarkup(<>{HINT}</>)
-    for (const w of ['Block Public Access', 'role', 'prefixes', 'links', 'versioning', 'expire', 'old versions']) expect(isTerm(hint, w), w).toBe(true)
+    for (const w of ['Block Public Access', 'versioning', 'One Zone-IA']) expect(isTerm(hint, w), w).toBe(true)
+    expect(text(hint).split(/\s+/).length).toBeLessThanOrEqual(40)
   })
 })
 
@@ -161,6 +163,13 @@ describe('store setup', () => {
     const h = setup(solution)
     expect(text(h).match(/Stored in one AZ only/g)).toHaveLength(1)
     expect(isTerm(h, 'AZ')).toBe(true)
+  })
+
+  it('warns on a move that targets a one-AZ shelf, too', () => {
+    const oz = { ...ruleFor(solution, 'receipts'), transitions: [{ afterDays: 30, to: 'one-zone-ia' as const }] }
+    const h = setup({ ...solution, rules: [...solution.rules.filter((r) => r.prefix !== 'receipts'), oz] })
+    expect(text(h).match(/Stored in one AZ only: lost if that AZ is destroyed/g)).toHaveLength(1)
+    expect(text(h).match(/Stored in one AZ only/g)).toHaveLength(2)
   })
 
   it('the versioning note wraps its AWS words', () => {

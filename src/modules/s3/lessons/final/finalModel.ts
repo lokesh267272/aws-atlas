@@ -25,8 +25,10 @@ import { MONTH_EVENTS, ONE_ZONE_AZ, solution as classesSolution, START_PLACEMENT
 import { lostFiles } from '../versioning/internChallenge'
 import { fixAll, MENU_KEYS, MENU_START, menuMatches, runScript, setMode } from '../versioning/versioningModel'
 import {
+  deletesTooEarly,
   emptyRule,
   ruleEvents,
+  ruleProblems,
   simulate,
   solution as lifecycleSolution,
   type Rule,
@@ -314,6 +316,7 @@ export function simulateYear(c: StoreConfig): YearResult {
         let lost = 0
         let late = 0
         const why: string[] = []
+        const counted = new Set<PrefixId>()
         fetches.forEach((f, i) => {
           const { cls, fee } = regular[i]
           extra.push({ month: e.month, prefix: f.prefix, fee: fee * (BUSY_FACTOR - 1) })
@@ -321,6 +324,7 @@ export function simulateYear(c: StoreConfig): YearResult {
           if (!cls) {
             if (FILE_TYPES[f.prefix].recreatable) late += 1
             else lost += 1
+            counted.add(f.prefix)
             why.push(`${prefixOf(f.prefix)} deleted too soon`)
           } else if (req && !allowed(req)) {
             late += 1
@@ -330,6 +334,15 @@ export function simulateYear(c: StoreConfig): YearResult {
             why.push(`${prefixOf(f.prefix)} on ${shelf(cls)} is too slow`)
           }
         })
+        // Lesson 5's early-delete check: a rule that deletes files Mealhop still needs loses them, even if no fetch hit one this month.
+        for (const p of PREFIX_IDS) {
+          const r = ruleFor(rules, p)
+          if (!r || counted.has(p) || FILE_TYPES[p].recreatable) continue
+          if (ruleProblems(r, c.placement[p]).length === 0 && deletesTooEarly(r)) {
+            lost += 1
+            why.push(`${prefixOf(p)} rule deletes files before Mealhop is done with them`)
+          }
+        }
         if (why.length === 0) return line(e, `A busy month (${BUSY_FACTOR} times the traffic): every fetch was on time`)
         return line(e, `A busy month: ${list(why)}`, { lost, late })
       }

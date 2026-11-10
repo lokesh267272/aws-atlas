@@ -5,13 +5,10 @@ import { Term } from '../../components/Term'
 import { Boundary, ServiceTile } from '../../components/diagram'
 import { cn } from '../../lib/cn'
 import { classById } from './storageClasses'
-import { FILE_TYPES, PREFIX_IDS, RECOMMENDED_CLASSES, s3Story } from './story'
+import { BUCKET_NAME, FILE_TYPES, PREFIX_IDS, RECOMMENDED_CLASSES, s3Story } from './story'
 import type { PrefixId } from './story'
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6
-
-/** A fixed example name, the same for every learner. */
-const BUCKET_NAME = 'mealhop-files'
 
 /** The file types that get a lifecycle rule at step 5. */
 const lifecyclePrefixes: PrefixId[] = ['receipts', 'delivery', 'backups']
@@ -22,7 +19,7 @@ const added: Record<Step, string> = {
   2: 'the ways in: a server role, a public-access block and links that expire.',
   3: 'a storage class on each kind of file.',
   4: 'versioning on the bucket.',
-  5: 'lifecycle rules on receipts, delivery photos and backups.',
+  5: 'lifecycle rules on receipts, delivery photos and backups, and a rule that also covers old menu versions.',
   6: 'nothing; the file store is complete.',
 }
 

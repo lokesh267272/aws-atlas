@@ -1,15 +1,15 @@
-import { s3Story } from '../../story'
+import { BUCKET_NAME, s3Story } from '../../story'
 
 /* ------------------------------------------------------------------ Bucket names */
 
 /** Why a bucket name can't be used. Order here is the order they are shown. */
 export type NameProblem = 'too-short' | 'too-long' | 'bad-chars' | 'bad-edge' | 'double-dot' | 'looks-like-ip' | 'reserved' | 'taken'
 
-/** Names another AWS account already owns in this story. Each one is otherwise a valid name. */
 /** Prefixes and suffixes AWS reserves, so no bucket name can start or end with them (checked against the AWS docs). */
 export const RESERVED_PREFIXES: string[] = ['xn--', 'sthree-', 'amzn-s3-demo-']
-export const RESERVED_SUFFIXES: string[] = ['-s3alias', '--ol-s3', '.mrap', '--x-s3', '--table-s3']
+export const RESERVED_SUFFIXES: string[] = ['-s3alias', '--ol-s3', '.mrap', '--x-s3', '--table-s3', '-an']
 
+/** Names another AWS account already owns in this story. Each one is otherwise a valid name. */
 export const TAKEN_NAMES: string[] = ['mealhop', 'mealhop-app', 'food-photos', 'photos', 'my-bucket', 'test-bucket']
 
 /**
@@ -105,7 +105,7 @@ export function menuLoads(s: BucketState): boolean {
 
 /** One way to stock the menu: a free name in Mumbai and each photo under the key the app asks for. */
 export const solution: BucketState = {
-  bucket: { name: 'mealhop-files', region: s3Story.regionCode },
+  bucket: { name: BUCKET_NAME, region: s3Story.regionCode },
   objects: APP_KEYS.map((key) => ({ key, file: key.slice('menu/'.length) })),
 }
 

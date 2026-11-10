@@ -6,6 +6,7 @@ import { Calendar, START_RULES, monthAt } from './Calendar'
 import Lesson from './Lesson'
 import { emptyRule, solution, type Rule } from './lifecycleModel'
 import { PROBLEM_LABELS, RuleBuilder, daysFromText } from './RuleBuilder'
+import { terms as sharedTerms } from '../../terms'
 import { terms } from './terms'
 
 const noop = () => {}
@@ -46,8 +47,9 @@ describe('lifecycle lesson', () => {
     expect(text).not.toMatch(/\d+ ?(times|x) (cheaper|less|more)|\d+ ?%/i)
   })
 
-  it('adds only its own two glossary keys', () => {
-    expect(Object.keys(terms).sort()).toEqual(['expiration-action', 'transition-action'])
+  it('adds no glossary keys of its own (transition-action and expiration-action are shared)', () => {
+    expect(Object.keys(terms)).toEqual([])
+    expect(Object.keys(sharedTerms)).toEqual(expect.arrayContaining(['expiration-action', 'transition-action']))
   })
 
   it('shows the file store at step 5', () => {
@@ -70,6 +72,13 @@ describe('rule builder', () => {
     expect(html).toMatch(/aria-label="receipts\/ move 2: to which shelf"/)
     expect(html).toMatch(/Add a move/)
     expect(html).toMatch(/aria-label="delivery\/: expire after how many days/)
+  })
+
+  it('warns when a move targets a one-AZ shelf, with AZ as a glossary term', () => {
+    const oz = withReceipts({ transitions: [{ afterDays: 30, to: 'one-zone-ia' }] })
+    const html = builder(oz)
+    expect(html).toMatch(/Stored in one <span[^>]*class="term"[^>]*>AZ<\/span> only: lost if that AZ is destroyed/)
+    expect(builder(solution)).not.toMatch(/Stored in one/)
   })
 
   it('keeps menu photos on Standard: only old versions can be cleaned up', () => {

@@ -23,7 +23,7 @@ const AREAS: { name: string; icon: LucideIcon; ids: ClassId[] }[] = [
 const shortName = (id: ClassId) => classById(id).name.replace(/^S3 /, '')
 const keepCost = (id: ClassId) => FILE.gb * classById(id).storePerGbMonth
 const fetchCost = (id: ClassId) => FILE.gb * classById(id).fetchPerGb
-const fetchText = (id: ClassId) => (fetchCost(id) === 0 ? 'Free' : money(fetchCost(id)))
+const fetchText = (id: ClassId) => (fetchCost(id) === 0 ? 'No retrieval fee' : money(fetchCost(id)))
 /** Bars share one scale, so keeping and fetching can be compared. */
 const BAR_MAX = Math.max(...CLASSES.map((c) => Math.max(keepCost(c.id), fetchCost(c.id))))
 
@@ -82,7 +82,7 @@ export function Shelves() {
       </div>
 
       <p className="sr-only" aria-live="polite">
-        {`${c.name}: ${money(keepCost(id))} a month to keep, ${fetchText(id).toLowerCase()} to fetch, ${waitPhrase(c)}, in ${
+        {`${c.name}: ${money(keepCost(id))} a month to keep, ${fetchCost(id) === 0 ? 'no retrieval fee' : `${money(fetchCost(id))} to fetch`}, ${waitPhrase(c)}, in ${
           c.azs === 1 ? 'one AZ' : 'at least 3 AZs'
         }.`}
       </p>
@@ -135,7 +135,7 @@ function Shelf({
         />
       </span>
       <span className="sr-only">
-        {`: ${money(keep)} a month to keep, ${fetch === 0 ? 'free' : money(fetch)} to fetch`}
+        {`: ${money(keep)} a month to keep, ${fetch === 0 ? 'no retrieval fee' : `${money(fetch)} to fetch`}`}
       </span>
     </label>
   )
@@ -151,7 +151,7 @@ function BarKey() {
         <span aria-hidden className="h-1.5 w-4 rounded-full bg-ink-3" /> fetch it once
       </span>
       <span className="inline-flex items-center gap-1.5">
-        <span aria-hidden className="h-1.5 w-4 rounded-full border border-dashed border-line-strong" /> free to fetch
+        <span aria-hidden className="h-1.5 w-4 rounded-full border border-dashed border-line-strong" /> no retrieval fee
       </span>
     </p>
   )
@@ -202,7 +202,7 @@ export function ShelfReadouts({ id }: { id: ClassId }) {
         />
       </div>
       {it && (
-        <p className="text-xs text-ink-3">S3 moves files between tiers by itself, and there is no fee to fetch them.</p>
+        <p className="text-xs text-ink-3">S3 moves files between tiers by itself, and there is no retrieval fee.</p>
       )}
       {c.minDays > 0 && (
         <p className="text-xs text-ink-3">

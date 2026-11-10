@@ -42,14 +42,8 @@ const EVENT: Record<YearEventKind, { icon: LucideIcon; title: ReactNode }> = {
 
 export const HINT = (
   <>
-    Keep <Term k="block-public-access">Block Public Access</Term> on, let the server <Term k="iam-role">role</Term> read both{' '}
-    <Term k="prefix">prefixes</Term> and sign receipt <Term k="presigned-url">links</Term>, and turn{' '}
-    <Term k="versioning">versioning</Term> on. Then keep menu photos on <Term k="s3-standard">S3 Standard</Term> and reports on{' '}
-    <Term k="s3-one-zone-ia">One Zone-IA</Term>, put the rest on <Term k="s3-standard-ia">Standard-IA</Term>, move receipts to{' '}
-    <Term k="s3-glacier-instant-retrieval">Glacier Instant Retrieval</Term> at 30 days and{' '}
-    <Term k="s3-glacier-deep-archive">Deep Archive</Term> at a year, <Term k="expiration-action">expire</Term> delivery
-    photos and backups at 30 days, and delete <Term k="noncurrent-version">old versions</Term> after 1 day (menu photos after
-    30).
+    Read the red log lines: each names the piece to fix. Keep <Term k="block-public-access">Block Public Access</Term> on, turn{' '}
+    <Term k="versioning">versioning</Term> on, and keep files you can&apos;t re-make out of <Term k="s3-one-zone-ia">One Zone-IA</Term>.
   </>
 )
 

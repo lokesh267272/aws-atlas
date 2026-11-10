@@ -69,6 +69,19 @@ export function canMove(from: ClassId, to: ClassId): boolean {
 }
 
 /**
+ * A sensible next move for "Add a move": the first shelf further down, 90 days after the last move.
+ * It skips Intelligent-Tiering, and skips One Zone-IA (one AZ only) unless Mealhop can re-make the prefix's files.
+ * 90 days covers the minimum stay of every shelf that has a shelf below it, so S3 accepts it.
+ */
+export function nextStep(rule: Rule, start: ClassId, prefix: PrefixId = rule.prefix): Step {
+  const last = rule.transitions[rule.transitions.length - 1]
+  const from = last?.to ?? start
+  const safe = (c: (typeof CLASSES)[number]) => c.azs !== 1 || FILE_TYPES[prefix].recreatable
+  const to = CLASSES.find((c) => c.id !== 'intelligent-tiering' && safe(c) && canMove(from, c.id))?.id ?? 'deep-archive'
+  return { afterDays: last ? last.afterDays + 90 : 30, to }
+}
+
+/**
  * Why S3 would reject this rule (empty = S3 accepts it). `startClass` is where the prefix's files are uploaded.
  *
  * One rule can't move files on from a class it moved them to before that class's minimum storage duration

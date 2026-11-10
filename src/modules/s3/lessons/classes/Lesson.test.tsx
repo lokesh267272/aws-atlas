@@ -49,7 +49,7 @@ describe('shelves', () => {
   it('reads the four numbers for the backup from the shared table', () => {
     const std = renderToStaticMarkup(<ShelfReadouts id="standard" />)
     expect(std).toMatch(/\$0\.50/)
-    expect(std).toMatch(/Free/)
+    expect(std).toMatch(/No retrieval fee/)
     expect(std).toMatch(/milliseconds/)
     expect(std).toMatch(/At least 3/)
     const deep = renderToStaticMarkup(<ShelfReadouts id="deep-archive" />)
@@ -68,7 +68,7 @@ describe('shelves', () => {
   })
 
   it('says Intelligent-Tiering moves files by itself with no fetch fee', () => {
-    expect(renderToStaticMarkup(<ShelfReadouts id="intelligent-tiering" />)).toMatch(/by itself, and there is no fee to fetch/)
+    expect(renderToStaticMarkup(<ShelfReadouts id="intelligent-tiering" />)).toMatch(/by itself, and there is no retrieval fee/)
   })
 
   it('does not call Standard a restore', () => {

@@ -16,7 +16,7 @@ export const terms: Glossary = {
   },
   's3-standard': {
     term: 'S3 Standard',
-    short: 'The everyday shelf for files you read often. Reads are instant and have no extra fee, but it costs the most per GB to keep.',
+    short: 'The everyday shelf for files you read often. Reads are instant and have no retrieval fee, but it costs the most per GB to keep.',
   },
   's3-standard-ia': {
     term: 'S3 Standard-IA',
@@ -24,7 +24,7 @@ export const terms: Glossary = {
   },
   's3-intelligent-tiering': {
     term: 'S3 Intelligent-Tiering',
-    short: 'S3 moves each file to a cheaper shelf on its own when it is not read for a while. There is no fee to read, but a small monitoring fee per object.',
+    short: 'S3 moves each file to a cheaper shelf on its own when it is not read for a while. There is no retrieval fee, but a small monitoring fee per object.',
   },
   's3-one-zone-ia': {
     term: 'S3 One Zone-IA',
@@ -69,5 +69,18 @@ export const terms: Glossary = {
   'lifecycle-rule': {
     term: 'Lifecycle rule',
     short: 'A rule that tells S3 to move files to a cheaper shelf, or delete them, after a set number of days. S3 does it for you automatically.',
+  },
+  'bucket-policy': {
+    term: 'Bucket policy',
+    short:
+      'A policy attached to an S3 bucket. It says who may do what with the bucket and its files, and it can allow or deny. A deny always wins.',
+  },
+  'transition-action': {
+    term: 'Transition action',
+    short: 'The part of a lifecycle rule that moves files to another storage class after a set number of days, such as to a cheaper shelf after 30 days.',
+  },
+  'expiration-action': {
+    term: 'Expiration action',
+    short: 'The part of a lifecycle rule that deletes files after a set number of days. With versioning on, the file is only hidden and kept as an old version until an old-version rule deletes it.',
   },
 }

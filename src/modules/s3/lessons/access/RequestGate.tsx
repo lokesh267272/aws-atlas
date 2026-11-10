@@ -22,9 +22,10 @@ import {
   type Reason,
   type Req,
 } from './accessModel'
+import { BUCKET_NAME } from '../../story'
 
-/** A fixed example bucket name, the same one the file-store diagram uses. */
-export const BUCKET = 'mealhop-files'
+/** The example bucket name, the same one the file-store diagram uses. */
+export const BUCKET = BUCKET_NAME
 
 /* ------------------------------------------------------------------ State */
 

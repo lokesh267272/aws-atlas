@@ -12,6 +12,7 @@ import {
   canMove,
   deletesTooEarly,
   emptyRule,
+  nextStep,
   ruleEvents,
   ruleProblems,
   type Rule,
@@ -100,17 +101,6 @@ function DaysInput({
   )
 }
 
-/**
- * A sensible next move: the first shelf further down (skipping Intelligent-Tiering), 90 days after the last move.
- * 90 days covers the minimum stay of every shelf that has a shelf below it, so S3 accepts it.
- */
-function nextStep(rule: Rule, start: ClassId): Step {
-  const last = rule.transitions[rule.transitions.length - 1]
-  const from = last?.to ?? start
-  const to = CLASSES.find((c) => c.id !== 'intelligent-tiering' && canMove(from, c.id))?.id ?? 'deep-archive'
-  return { afterDays: last ? last.afterDays + 90 : 30, to }
-}
-
 /** The path one month of files takes under this rule, as small chips. */
 function Path({ events, rule }: { events: RuleEvent[]; rule: Rule }) {
   const hidden = events.find((e) => e.kind === 'hide')
@@ -166,6 +156,7 @@ function RuleCard({ rule, onChange }: { rule: Rule; onChange: (r: Rule) => void 
   const problems = ruleProblems(rule, start)
   const early = deletesTooEarly(rule)
   const menu = rule.prefix === 'menu'
+  const oneAz = !menu && rule.transitions.some((t) => classById(t.to).azs === 1)
   const last = rule.transitions[rule.transitions.length - 1]
   const canAdd = rule.transitions.length < MAX_MOVES && CLASSES.some((c) => canMove(last?.to ?? start, c.id))
 
@@ -223,12 +214,17 @@ function RuleCard({ rule, onChange }: { rule: Rule; onChange: (r: Rule) => void 
               ))}
             </ol>
           )}
+          {oneAz && (
+            <p className="mt-2 text-xs font-bold text-warn">
+              Stored in one <Term k="availability-zone">AZ</Term> only: lost if that AZ is destroyed
+            </p>
+          )}
           {canAdd && (
             <Button
               size="sm"
               className="mt-2"
               aria-label={`Add a move for ${ft.prefix}`}
-              onClick={() => onChange({ ...rule, transitions: [...rule.transitions, nextStep(rule, start)] })}
+              onClick={() => onChange({ ...rule, transitions: [...rule.transitions, nextStep(rule, start, rule.prefix)] })}
             >
               <Plus aria-hidden />
               Add a move

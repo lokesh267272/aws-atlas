@@ -6,6 +6,7 @@ import {
   SEVEN_YEAR_BUDGET,
   canMove,
   emptyRule,
+  nextStep,
   ruleEvents,
   ruleProblems,
   simulate,
@@ -92,6 +93,24 @@ describe('the 7-year challenge', () => {
   it('a menu-version rule makes sense for the story numbers', () => {
     expect(MENU_VERSIONS_GB_PER_MONTH).toBeGreaterThan(0)
     expect(MENU_VERSIONS_GB_PER_MONTH).toBeLessThanOrEqual(FILE_TYPES.menu.newGbPerMonth)
+  })
+})
+
+describe('nextStep (the suggested next move)', () => {
+  it("from Standard-IA, receipts (can't be re-made) are not suggested One Zone-IA", () => {
+    const step = nextStep(emptyRule('receipts'), 'standard-ia', 'receipts')
+    expect(step.to).not.toBe('one-zone-ia')
+    expect(classById(step.to).azs).toBe(3)
+    expect(step.to).toBe('glacier-ir')
+  })
+
+  it('from Standard-IA, reports (can be re-made) may be suggested One Zone-IA', () => {
+    expect(nextStep(emptyRule('reports'), 'standard-ia', 'reports').to).toBe('one-zone-ia')
+  })
+
+  it('never suggests a one-AZ shelf for any prefix that cannot be re-made', () => {
+    for (const p of PREFIX_IDS.filter((x) => !FILE_TYPES[x].recreatable))
+      for (const start of ['standard', 'standard-ia'] as const) expect(classById(nextStep(emptyRule(p), start, p).to).azs).toBe(3)
   })
 })
 

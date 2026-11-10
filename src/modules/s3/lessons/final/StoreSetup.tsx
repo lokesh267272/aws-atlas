@@ -1,5 +1,5 @@
-import { useId, type ReactNode } from 'react'
-import { Camera, DatabaseBackup, FileChartColumn, Image, Receipt, type LucideIcon } from 'lucide-react'
+import { useId, useState, type ReactNode } from 'react'
+import { Camera, DatabaseBackup, FileChartColumn, Image, Receipt, X, type LucideIcon } from 'lucide-react'
 import { Pill, Segmented, Switch } from '../../../../components/controls'
 import { Term } from '../../../../components/Term'
 import { cn } from '../../../../lib/cn'
@@ -57,7 +57,13 @@ const note = 'text-xs text-ink-3'
 
 function AccessPanel({ c, set }: { c: StoreConfig; set: (next: Partial<StoreConfig>) => void }) {
   const a = c.access
-  const update = (patch: Partial<StoreConfig['access']>) => set({ access: { ...a, ...patch } })
+  /** The learner just tried "Make public" while Block Public Access was on (lesson 2's refusal). */
+  const [refused, setRefused] = useState(false)
+  const update = (patch: Partial<StoreConfig['access']>) => {
+    setRefused(false)
+    set({ access: { ...a, ...patch } })
+  }
+  const tryPublic = (on: boolean) => (on && a.blockPublicAccess ? setRefused(true) : update({ publicRead: on }))
   return (
     <Panel title="Who gets in">
       <div>
@@ -67,9 +73,16 @@ function AccessPanel({ c, set }: { c: StoreConfig; set: (next: Partial<StoreConf
         </p>
       </div>
       <div>
-        <Switch label="Make public" checked={a.publicRead} onChange={(v) => update({ publicRead: v })} />
-        <p className={cn(note, 'mt-1')}>
-          {a.publicRead && a.blockPublicAccess ? (
+        <Switch label="Make public" checked={a.publicRead} onChange={tryPublic} />
+        <p aria-live="polite" className={cn(note, 'mt-1')}>
+          {refused ? (
+            <Pill tone="bad" className="whitespace-normal">
+              <X aria-hidden />
+              <span>
+                Refused: <Term k="block-public-access">Block Public Access</Term> is on
+              </span>
+            </Pill>
+          ) : a.publicRead && a.blockPublicAccess ? (
             <span className="font-bold text-warn">
               Ignored while <Term k="block-public-access">Block Public Access</Term> is on
             </span>
@@ -149,6 +162,7 @@ function MoveSlot({
   const step = rule.transitions[index]
   const prev = index === 1 ? rule.transitions[0] : undefined
   const blocked = index === 1 && !prev
+  const oneAz = step !== undefined && classById(step.to).azs === 1
   /** A sensible first day: 30 for the first move; for the second, after the first shelf's minimum stay. */
   const defaultDay = () => {
     if (!prev) return MOVE_DAYS[0]
@@ -195,6 +209,11 @@ function MoveSlot({
           </option>
         ))}
       </select>
+      {oneAz && (
+        <span className="basis-full text-xs font-bold text-warn">
+          Stored in one <Term k="availability-zone">AZ</Term> only: lost if that AZ is destroyed
+        </span>
+      )}
     </li>
   )
 }

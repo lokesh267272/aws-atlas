@@ -177,6 +177,14 @@ describe('final model: each event', () => {
     expect(logOf(early, 'busy-month').lost).toBe(1)
   })
 
+  it('a rule that deletes backups after 2 days loses them (lesson 5 early-delete check), and the log says so', () => {
+    const early = withRule(solution, { ...ruleOf(solution, 'backups'), transitions: [], expireAfterDays: 2 })
+    const r = simulateYear(early)
+    expect(r.lost).toBeGreaterThan(0)
+    expect(logOf(early, 'busy-month').text).toMatch(/backups\/ rule deletes files before/)
+    expect(r.solved).toBe(false)
+  })
+
   it('the fire: reports on One Zone-IA are re-made, not lost', () => {
     expect(logOf(solution, 'az-destroyed')).toMatchObject({ ok: true, lost: 0 })
     expect(logOf(solution, 'az-destroyed').text).toMatch(/re-made/)
