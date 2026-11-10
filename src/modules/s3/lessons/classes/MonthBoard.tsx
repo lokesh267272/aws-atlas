@@ -189,7 +189,7 @@ export function MonthBoard() {
 
       <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
         <div className="min-w-0">
-          <h4 className="text-sm font-bold text-ink-2">Mealhop&apos;s files</h4>
+          <h4 className="text-sm font-bold text-ink-2">{s3Story.appName}&apos;s files</h4>
           <ul className="mt-2 grid gap-2">
             {PREFIX_IDS.map((id) => (
               <FileRow key={id} id={id} uid={uid} value={placement[id]} onPick={(c) => choose(id, c)} />
@@ -207,7 +207,7 @@ export function MonthBoard() {
               {running ? 'Running the month' : 'Run the month'}
             </Button>
             <Readout label="Late fetches" value={shown === null ? '–' : lateSoFar} tone={lateSoFar > 0 ? 'bad' : finished ? 'ok' : 'neutral'} />
-            <Readout label="Files lost" value={shown === null ? '–' : lostSoFar} tone={lostSoFar > 0 ? 'bad' : finished ? 'ok' : 'neutral'} />
+            <Readout label="File types lost" value={shown === null ? '–' : lostSoFar} tone={lostSoFar > 0 ? 'bad' : finished ? 'ok' : 'neutral'} />
           </div>
         </div>
 
