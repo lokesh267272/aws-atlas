@@ -31,7 +31,7 @@ export const MONTH_EVENTS: MonthEvent[] = [
 export const MONTH_BUDGET = 38
 
 /** The sensible shelf for each file type: the same one the file-store diagram shows. */
-export const solution: Placement = RECOMMENDED_CLASSES
+export const solution: Placement = Object.freeze({ ...RECOMMENDED_CLASSES })
 
 /** The challenge starts with everything on the front counter. */
 export const START_PLACEMENT: Placement = { menu: 'standard', receipts: 'standard', delivery: 'standard', backups: 'standard', reports: 'standard' }

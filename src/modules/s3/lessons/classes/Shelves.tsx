@@ -5,7 +5,7 @@ import { Bench } from '../../../../components/lesson'
 import { Pill, Readout } from '../../../../components/controls'
 import { Term } from '../../../../components/Term'
 import { cn } from '../../../../lib/cn'
-import { CLASSES, classById, EXAMPLE_PRICE_TAG, type ClassId } from '../../storageClasses'
+import { CLASSES, classById, EXAMPLE_PRICE_TAG, needsRestore, waitPhrase, type ClassId } from '../../storageClasses'
 import { FILE_TYPES } from '../../story'
 import { money } from './format'
 
@@ -82,7 +82,7 @@ export function Shelves() {
       </div>
 
       <p className="sr-only" aria-live="polite">
-        {`${c.name}: ${money(keepCost(id))} a month to keep, ${fetchText(id).toLowerCase()} to fetch, back in ${c.firstByteLabel}, in ${
+        {`${c.name}: ${money(keepCost(id))} a month to keep, ${fetchText(id).toLowerCase()} to fetch, ${waitPhrase(c)}, in ${
           c.azs === 1 ? 'one AZ' : 'at least 3 AZs'
         }.`}
       </p>
@@ -174,6 +174,7 @@ function AzSquares({ n }: { n: 1 | 3 }) {
 export function ShelfReadouts({ id }: { id: ClassId }) {
   const c = classById(id)
   const it = id === 'intelligent-tiering'
+  const restore = needsRestore(c)
   return (
     <div className="grid gap-3">
       <p className="text-sm text-ink-2">
@@ -188,9 +189,10 @@ export function ShelfReadouts({ id }: { id: ClassId }) {
         />
         <Readout label="Fetch it back" value={fetchText(id)} />
         <Readout
-          label="Time to get it back"
+          label={restore ? 'Standard restore time' : 'Time to get it back'}
           value={<span className="text-base sm:text-lg">{c.firstByteLabel}</span>}
-          tone={c.firstByteSeconds > 1 ? 'warn' : 'neutral'}
+          tone={restore ? 'warn' : 'neutral'}
+          hint={restore ? 'Ask S3 to restore it first; then it can be read.' : undefined}
         />
         <Readout
           label="AZs holding it"
@@ -199,6 +201,9 @@ export function ShelfReadouts({ id }: { id: ClassId }) {
           hint={<AzSquares n={c.azs} />}
         />
       </div>
+      {it && (
+        <p className="text-xs text-ink-3">S3 moves files between tiers by itself, and there is no fee to fetch them.</p>
+      )}
       {c.minDays > 0 && (
         <p className="text-xs text-ink-3">
           Billed for at least {c.minDays} days (<Term k="minimum-storage-duration">minimum</Term>)

@@ -43,6 +43,8 @@ describe('the month (brief)', () => {
 describe('the month (details)', () => {
   it('the solution is the shared recommended placement', () => {
     expect(solution).toEqual(RECOMMENDED_CLASSES)
+    expect(solution).not.toBe(RECOMMENDED_CLASSES)
+    expect(Object.isFrozen(solution)).toBe(true)
   })
 
   it('has the six scripted events in order, ending with the AZ that holds One Zone data destroyed', () => {

@@ -36,11 +36,11 @@ export const terms: Glossary = {
   },
   's3-glacier-flexible-retrieval': {
     term: 'S3 Glacier Flexible Retrieval',
-    short: 'A very cheap archive shelf. Getting a file back takes minutes to hours, so it suits data you can wait for. It has a 90-day minimum.',
+    short: 'A very cheap archive shelf. You ask S3 to restore a file first, which usually takes a few hours, so it suits data you can wait for. It has a 90-day minimum.',
   },
   's3-glacier-deep-archive': {
     term: 'S3 Glacier Deep Archive',
-    short: 'The cheapest shelf, for files you keep for years and almost never open. Getting one back takes up to 12 hours, and you pay for at least 180 days.',
+    short: 'The cheapest shelf, for files you keep for years and almost never open. You restore a file first; a standard restore usually takes up to 12 hours. You pay for at least 180 days.',
   },
   'retrieval-fee': {
     term: 'Retrieval fee',
