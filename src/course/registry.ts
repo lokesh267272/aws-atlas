@@ -1,5 +1,6 @@
 import { foundations } from '../modules/foundations'
 import { ec2 } from '../modules/ec2'
+import { s3 } from '../modules/s3'
 import { baseGlossary } from './glossary'
 import type { CourseModule, Glossary, GlossaryEntry } from './types'
 
@@ -8,7 +9,7 @@ import type { CourseModule, Glossary, GlossaryEntry } from './types'
  * To add a module: create src/modules/<id>/index.ts exporting a CourseModule
  * and append it here.
  */
-export const modules: CourseModule[] = [foundations, ec2]
+export const modules: CourseModule[] = [foundations, ec2, s3]
 
 export const glossary: Glossary = Object.assign({}, baseGlossary, ...modules.map((m) => m.terms))
 
